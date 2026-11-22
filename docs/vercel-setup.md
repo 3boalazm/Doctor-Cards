@@ -59,3 +59,12 @@ Before enabling Vercel Preview/Production APIs:
 6. Confirm printer bleed/color/duplex specifications and test a physical proof before producing cards.
 
 **Do not enter real doctor data or print production QR cards from the sandbox preview URL.**
+
+
+## Update: production login + Postgres (branch `fix/production-login-and-postgres`)
+
+- The blanket `503` on `NODE_ENV=production` is removed. Login is fail-closed instead: if `ADMIN_PASSWORD` (12+ chars) or `AUTH_SECRET` (32+ chars) is missing, `/api/auth` returns 503 with a clear message; the default preview password only works outside production and is no longer shown on the login page.
+- Sessions are HMAC-signed (verified on every request, `Secure` cookie in production), password comparison is constant-time, and 5 failed attempts per IP lock for 10 minutes (best-effort per instance).
+- Storage: when `POSTGRES_URL` or `DATABASE_URL` exists (Vercel Postgres already provisioned), cards/scans/monthly totals live in Postgres (tables auto-created, serial via sequence). Without it, local dev keeps using `.data/store.json`.
+- Tests: `npm test` (HTTP smoke, needs dev server) and `node scripts/pg-store-test.mjs` (store logic on PGlite).
+- Still open: consent evidence/audit log, photo upload, scheduled purge job, multi-user roles.

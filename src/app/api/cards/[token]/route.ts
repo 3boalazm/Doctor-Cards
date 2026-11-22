@@ -6,7 +6,6 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request, context: { params: Promise<{ token: string }> }) {
-  if (process.env.NODE_ENV === 'production') return NextResponse.json({ error: 'النسخة الحالية للتطوير المحلي فقط.' }, { status: 503 });
   const { token } = await context.params;
   const mode = new URL(request.url).searchParams.get('mode');
   if (mode === 'print') {
@@ -21,7 +20,6 @@ export async function GET(request: Request, context: { params: Promise<{ token: 
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ token: string }> }) {
-  if (process.env.NODE_ENV === 'production') return NextResponse.json({ error: 'النسخة الحالية للتطوير المحلي فقط.' }, { status: 503 });
   if (!verifySession(request)) return NextResponse.json({ error: 'سجل الدخول أولاً.' }, { status: 401 });
   const { token } = await context.params;
   const body = await request.json().catch(() => null);

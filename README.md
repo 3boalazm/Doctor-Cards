@@ -23,3 +23,7 @@ Open `http://localhost:3000` and sign in with the local preview password `doctor
 Run `npm test` while the dev server is running for an integration smoke test.
 
 **Important:** current storage is a local JSON development adapter under `.data/`; the login is a local preview guard, not production identity/authentication. Use fictional test records only. Do not deploy or enter real doctor data until PostgreSQL/Prisma persistence, production authentication/authorization, durable consent evidence, reliable scheduled analytics retention, complete profile fields (including social links/photo), and supplier-approved print output are implemented and reviewed.
+
+
+## Production login
+Set `ADMIN_PASSWORD` (12+ chars) and `AUTH_SECRET` (32+ chars, `openssl rand -hex 32`) in Vercel → Settings → Environment Variables (Production), then redeploy. Never commit them.

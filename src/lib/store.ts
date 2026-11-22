@@ -1,97 +1,14 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import path from 'node:path';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { databaseUrl, pgQuery } from './db';
+import { createPgStore } from './store-pg';
+import * as json from './store-json';
 
-export type DoctorCard = {
-  id: string;
-  doctorNameAr: string;
-  doctorNameEn: string;
-  specialty: string;
-  phone: string;
-  whatsapp: string;
-  email: string;
-  clinicAddress: string;
-  mapsUrl: string;
-  website: string;
-  bio: string;
-  serial: string;
-  token: string;
-  edition: 'STANDARD' | 'LIMITED' | 'DEMO';
-  status: 'ACTIVE' | 'SUSPENDED';
-  distributionStatus: 'NOT_DISTRIBUTED' | 'DISTRIBUTED';
-  distributedAt?: string;
-  consentProfile: boolean;
-  consentPhoto: boolean;
-  createdAt: string;
-};
-type ScanEvent = { cardId: string; at: string };
-type Store = { cards: DoctorCard[]; scans: ScanEvent[]; monthly: Record<string, number> };
-const dataDir = path.join(process.cwd(), '.data');
-const dataFile = path.join(dataDir, 'store.json');
-let writeQueue: Promise<unknown> = Promise.resolve();
-
-// P1 local development adapter only. Replace with PostgreSQL/Prisma before any real or production data.
-async function readStore(): Promise<Store> {
-  try {
-    const raw = JSON.parse(await readFile(dataFile, 'utf8')) as Partial<Store>;
-    return { cards: (raw.cards ?? []).map((card) => ({ ...card, distributionStatus: card.distributionStatus ?? 'NOT_DISTRIBUTED' })), scans: raw.scans ?? [], monthly: raw.monthly ?? {} };
-  } catch { return { cards: [], scans: [], monthly: {} }; }
-}
-async function writeStore(store: Store) {
-  await mkdir(dataDir, { recursive: true });
-  const temp = `${dataFile}.${randomUUID()}.tmp`;
-  await writeFile(temp, JSON.stringify(store, null, 2), 'utf8');
-  await rename(temp, dataFile);
-}
-async function mutate<T>(fn: (store: Store) => T | Promise<T>): Promise<T> {
-  let resolve!: (value: T) => void; let reject!: (reason?: unknown) => void;
-  const result = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
-  writeQueue = writeQueue.then(async () => {
-    try { const store = await readStore(); const value = await fn(store); await writeStore(store); resolve(value); }
-    catch (error) { reject(error); }
-  });
-  await result; return result;
-}
-function pruneEvents(store: Store, now = Date.now()) {
-  const cutoff = now - 60 * 24 * 60 * 60 * 1000;
-  store.scans = store.scans.filter((event) => new Date(event.at).getTime() >= cutoff);
-}
-export async function cleanupExpiredScans() {
-  await mutate((store) => { pruneEvents(store); });
-}
-export async function listCards() {
-  const store = await readStore();
-  return store.cards.map((card) => ({ ...card, scans: Object.entries(store.monthly).filter(([key]) => key.startsWith(`${card.id}:`)).reduce((sum, [, count]) => sum + count, 0) }));
-}
-export async function createCard(input: Omit<DoctorCard, 'id' | 'token' | 'createdAt' | 'status' | 'serial' | 'distributionStatus'>) {
-  return mutate((store) => {
-    const sequence = store.cards.length + 1;
-    const prefix = input.edition === 'LIMITED' ? 'AZM-L' : input.edition === 'DEMO' ? 'AZM-D' : 'AZM-S';
-    const card: DoctorCard = { ...input, id: randomUUID(), serial: `${prefix}${String(sequence).padStart(3, '0')}`, token: randomBytes(24).toString('base64url'), status: 'ACTIVE', distributionStatus: 'NOT_DISTRIBUTED', createdAt: new Date().toISOString() };
-    store.cards.unshift(card); return card;
-  });
-}
-export async function updateCard(token: string, patch: Partial<Pick<DoctorCard, 'doctorNameAr' | 'doctorNameEn' | 'specialty' | 'phone' | 'whatsapp' | 'email' | 'clinicAddress' | 'mapsUrl' | 'website' | 'bio' | 'edition' | 'status' | 'distributionStatus' | 'consentProfile' | 'consentPhoto'>>) {
-  return mutate((store) => {
-    const card = store.cards.find((item) => item.token === token); if (!card) return null;
-    Object.assign(card, patch);
-    if (patch.distributionStatus) card.distributedAt = patch.distributionStatus === 'DISTRIBUTED' ? new Date().toISOString() : undefined;
-    return card;
-  });
-}
-export async function getCardForPrint(token: string) {
-  const store = await readStore(); const card = store.cards.find((item) => item.token === token);
-  if (!card || card.status !== 'ACTIVE' || !card.consentProfile) return null;
-  const { doctorNameAr, doctorNameEn, specialty, serial, token: qrToken, edition } = card;
-  return { doctorNameAr, doctorNameEn, specialty, serial, token: qrToken, edition };
-}
-export async function getPublicCard(token: string) {
-  return mutate((store) => {
-    const card = store.cards.find((item) => item.token === token);
-    if (!card || card.status !== 'ACTIVE' || !card.consentProfile) return null;
-    const now = new Date(); const month = now.toISOString().slice(0, 7); const key = `${card.id}:${month}`;
-    store.monthly[key] = (store.monthly[key] ?? 0) + 1;
-    store.scans.push({ cardId: card.id, at: now.toISOString() }); pruneEvents(store, now.getTime());
-    return card;
-  });
-}
+export type { DoctorCard } from './store-json';
+// Postgres when a connection string exists (Vercel); local JSON file otherwise (dev only).
+const pg = databaseUrl() ? createPgStore(pgQuery) : null;
+const impl = pg ?? json;
+export const listCards = (...a: Parameters<typeof json.listCards>) => impl.listCards(...a);
+export const createCard = (...a: Parameters<typeof json.createCard>) => impl.createCard(...a);
+export const updateCard = (...a: Parameters<typeof json.updateCard>) => impl.updateCard(...a);
+export const getCardForPrint = (...a: Parameters<typeof json.getCardForPrint>) => impl.getCardForPrint(...a);
+export const getPublicCard = (...a: Parameters<typeof json.getPublicCard>) => impl.getPublicCard(...a);
+export const cleanupExpiredScans = (...a: Parameters<typeof json.cleanupExpiredScans>) => impl.cleanupExpiredScans(...a);

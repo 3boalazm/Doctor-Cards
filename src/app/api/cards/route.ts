@@ -5,13 +5,11 @@ import { verifySession } from '@/lib/auth';
 export const runtime = 'nodejs';
 
 export async function GET(request: Request) {
-  if (process.env.NODE_ENV === 'production') return NextResponse.json({ error: 'النسخة الحالية للتطوير المحلي فقط.' }, { status: 503 });
   if (!verifySession(request)) return NextResponse.json({ error: 'سجل الدخول أولاً.' }, { status: 401 });
   return NextResponse.json(await listCards());
 }
 
 export async function POST(request: Request) {
-  if (process.env.NODE_ENV === 'production') return NextResponse.json({ error: 'النسخة الحالية للتطوير المحلي فقط.' }, { status: 503 });
   if (!verifySession(request)) return NextResponse.json({ error: 'سجل الدخول أولاً.' }, { status: 401 });
   const body = await request.json().catch(() => null);
   if (!body || typeof body.doctorNameAr !== 'string' || !body.doctorNameAr.trim()) {
