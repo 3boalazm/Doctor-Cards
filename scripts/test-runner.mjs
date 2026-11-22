@@ -31,6 +31,7 @@ try {
   await run(process.execPath, ['scripts/smoke-test.mjs'], { ...env, TEST_BASE_URL: base });
   await run(process.execPath, ['scripts/print-layout-test.mjs'], env);
   await run(process.execPath, ['scripts/profile-test.mjs'], env);
+  await run(process.execPath, ['scripts/portrait-test.mjs'], env);
 } finally {
   stop();
 }

@@ -14,6 +14,7 @@ export type DoctorCard = {
   mapsUrl: string;
   website: string;
   bio: string;
+  portraitData: string | null;
   serial: string;
   token: string;
   edition: 'STANDARD' | 'LIMITED' | 'DEMO';
@@ -34,7 +35,7 @@ let writeQueue: Promise<unknown> = Promise.resolve();
 async function readStore(): Promise<Store> {
   try {
     const raw = JSON.parse(await readFile(dataFile, 'utf8')) as Partial<Store>;
-    return { cards: (raw.cards ?? []).map((card) => ({ ...card, distributionStatus: card.distributionStatus ?? 'NOT_DISTRIBUTED' })), scans: raw.scans ?? [], monthly: raw.monthly ?? {} };
+    return { cards: (raw.cards ?? []).map((card) => ({ ...card, portraitData: card.portraitData ?? null, distributionStatus: card.distributionStatus ?? 'NOT_DISTRIBUTED' })), scans: raw.scans ?? [], monthly: raw.monthly ?? {} };
   } catch { return { cards: [], scans: [], monthly: {} }; }
 }
 async function writeStore(store: Store) {
@@ -71,7 +72,7 @@ export async function createCard(input: Omit<DoctorCard, 'id' | 'token' | 'creat
     store.cards.unshift(card); return card;
   });
 }
-export async function updateCard(token: string, patch: Partial<Pick<DoctorCard, 'doctorNameAr' | 'doctorNameEn' | 'specialty' | 'phone' | 'whatsapp' | 'email' | 'clinicAddress' | 'mapsUrl' | 'website' | 'bio' | 'edition' | 'status' | 'distributionStatus' | 'consentProfile' | 'consentPhoto'>>) {
+export async function updateCard(token: string, patch: Partial<Pick<DoctorCard, 'doctorNameAr' | 'doctorNameEn' | 'specialty' | 'phone' | 'whatsapp' | 'email' | 'clinicAddress' | 'mapsUrl' | 'website' | 'bio' | 'portraitData' | 'edition' | 'status' | 'distributionStatus' | 'consentProfile' | 'consentPhoto'>>) {
   return mutate((store) => {
     const card = store.cards.find((item) => item.token === token); if (!card) return null;
     Object.assign(card, patch);
@@ -82,8 +83,8 @@ export async function updateCard(token: string, patch: Partial<Pick<DoctorCard, 
 export async function getCardForPrint(token: string) {
   const store = await readStore(); const card = store.cards.find((item) => item.token === token);
   if (!card || card.status !== 'ACTIVE' || !card.consentProfile) return null;
-  const { doctorNameAr, doctorNameEn, specialty, serial, token: qrToken, edition } = card;
-  return { doctorNameAr, doctorNameEn, specialty, serial, token: qrToken, edition };
+  const { doctorNameAr, doctorNameEn, specialty, serial, token: qrToken, edition, portraitData } = card;
+  return { doctorNameAr, doctorNameEn, specialty, serial, token: qrToken, edition, portraitData: card.consentPhoto ? portraitData : null };
 }
 export async function getPublicCardSnapshot(token: string) {
   const store = await readStore();

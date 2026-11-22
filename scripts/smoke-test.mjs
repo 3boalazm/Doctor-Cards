@@ -13,7 +13,7 @@ try {
   assert.equal(denied.status, 401, 'admin listing must reject unauthenticated requests');
   const invalid = await fetch(`${base}/api/cards`, { method: 'POST', headers, body: JSON.stringify({ doctorNameAr: 'ناقص موافقة' }) });
   assert.equal(invalid.status, 400, 'profile publication must require recorded consent');
-  const create = await fetch(`${base}/api/cards`, { method: 'POST', headers, body: JSON.stringify({ doctorNameAr: 'اختبار تكاملي', doctorNameEn: 'Integration Test', specialty: 'اختبار', phone: '+201000000000', email: 'test@example.test', edition: 'DEMO', consentProfile: true, consentPhoto: false }) });
+  const create = await fetch(`${base}/api/cards`, { method: 'POST', headers, body: JSON.stringify({ doctorNameAr: 'اختبار تكاملي', doctorNameEn: 'Integration Test', specialty: 'اختبار', phone: '+201000000000', email: 'test@example.test', portraitData: 'data:image/jpeg;base64,/9j/2Q==', edition: 'DEMO', consentProfile: true, consentPhoto: true }) });
   assert.equal(create.status, 201, 'authorized admin should create a demo card');
   const card = await create.json(); createdToken = card.token;
   assert.match(card.serial, /^AZM-D\d{3}$/);
@@ -22,8 +22,11 @@ try {
   assert.equal(profileResponse.status, 200, 'active QR route should resolve a published profile');
   const profile = await profileResponse.json();
   assert.equal(profile.doctorNameAr, 'اختبار تكاملي');
+  assert.equal(profile.portraitData, 'data:image/jpeg;base64,/9j/2Q==', 'consented portrait should render on public profile');
   assert.equal('serial' in profile, false, 'public profile must not expose internal serial');
   assert.equal('token' in profile, false, 'public profile must not expose token');
+  const printResponse = await fetch(`${base}/api/cards/${card.token}?mode=print`);
+  assert.equal((await printResponse.json()).portraitData, 'data:image/jpeg;base64,/9j/2Q==');
   const vcfResponse = await fetch(`${base}/api/cards/${card.token}/vcf`);
   assert.equal(vcfResponse.status, 200);
   assert.match(vcfResponse.headers.get('content-type'), /text\/vcard/);

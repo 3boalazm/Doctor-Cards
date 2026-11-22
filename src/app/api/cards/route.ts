@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createCard, listCards } from '@/lib/store';
 import { verifySession } from '@/lib/auth';
+import { validatePortraitData } from '@/lib/portrait-validation';
 
 export const runtime = 'nodejs';
 
@@ -25,6 +26,8 @@ export async function POST(request: Request) {
     if (!value || typeof value !== 'string') return '';
     try { return new URL(value).protocol === 'https:' ? value : ''; } catch { return ''; }
   };
+  const portrait = body.consentPhoto ? validatePortraitData(body.portraitData) : { ok: true as const, data: null };
+  if (!portrait.ok) return NextResponse.json({ error: portrait.error }, { status: 400 });
   const card = await createCard({
     doctorNameAr: body.doctorNameAr.trim().slice(0, 100),
     doctorNameEn: String(body.doctorNameEn ?? '').trim().slice(0, 100),
@@ -36,6 +39,7 @@ export async function POST(request: Request) {
     mapsUrl: safeUrl(body.mapsUrl),
     website: safeUrl(body.website),
     bio: String(body.bio ?? '').trim().slice(0, 500),
+    portraitData: portrait.data,
     edition: body.edition === 'LIMITED' ? 'LIMITED' : body.edition === 'DEMO' ? 'DEMO' : 'STANDARD',
     consentProfile: Boolean(body.consentProfile),
     consentPhoto: Boolean(body.consentPhoto),
