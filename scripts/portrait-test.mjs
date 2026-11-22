@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import { MAX_PORTRAIT_BYTES, validatePortraitData } from '../src/lib/portrait-validation.ts';
+const valid = 'data:image/jpeg;base64,/9j/2Q==';
+assert.deepEqual(validatePortraitData(null), { ok: true, data: null });
+assert.deepEqual(validatePortraitData(valid), { ok: true, data: valid });
+assert.equal(validatePortraitData('data:image/png;base64,iVBORw0KGgo=').ok, false);
+assert.equal(validatePortraitData('data:image/jpeg;base64,YWJj').ok, false);
+const oversized = `data:image/jpeg;base64,${Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(MAX_PORTRAIT_BYTES)]).toString('base64')}`;
+assert.equal(validatePortraitData(oversized).ok, false);
+console.log('Portrait upload validation tests passed');

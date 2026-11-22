@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { CARD_BLEED_MM, CARD_TRIM, QR_PRINT, SHEET_LAYOUTS, printQrUrl } from '../src/lib/print-spec.ts';
+const css = await readFile(new URL('../src/app/print/print.css', import.meta.url), 'utf8');
+const page = await readFile(new URL('../src/app/print/[token]/page.tsx', import.meta.url), 'utf8');
+assert.deepEqual(CARD_TRIM, { widthMm: 85, heightMm: 55 });
+assert.equal(CARD_BLEED_MM, 3);
+assert.equal(QR_PRINT.sizeMm, 34);
+assert.equal(QR_PRINT.quietZoneModules, 4);
+assert.equal(QR_PRINT.errorCorrectionLevel, 'Q');
+assert.deepEqual(SHEET_LAYOUTS.A4, { cardsPerSheet: 8, columns: 2, rows: 4 });
+assert.deepEqual(SHEET_LAYOUTS.A5, { cardsPerSheet: 3, columns: 1, rows: 3 });
+assert.equal(printQrUrl('https://cards.test/', 'x'), 'https://cards.test/c/x');
+for (const marker of ['@page bleedCard', '@page trimCard', '@page sheetA4', '@page sheetA5', '85mm', '55mm', '91mm', '61mm', '#ff6b47', '#080710', '34mm']) assert.ok(css.includes(marker), `print stylesheet missing ${marker}`);
+assert.ok(page.includes("errorCorrectionLevel: QR_PRINT.errorCorrectionLevel"));
+assert.ok(!page.includes('<style jsx'), 'print styles must live in the dedicated CSS stylesheet');
+console.log('Print layout tests passed');

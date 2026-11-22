@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+const client = await readFile(new URL('../src/app/c/[token]/profile-client.tsx', import.meta.url), 'utf8');
+const page = await readFile(new URL('../src/app/c/[token]/page.tsx', import.meta.url), 'utf8');
+const css = await readFile(new URL('../src/app/c/[token]/profile.css', import.meta.url), 'utf8');
+for (const feature of ['localStorage', 'navigator.share', 'doctor-card-locale', '/api/cards/${token}/vcf', 'profile.portraitData', 'tel:', 'wa.me', 'mailto:', 'profile.mapsUrl', 'profile.website']) assert.ok(client.includes(feature), `public profile missing ${feature}`);
+assert.ok(page.includes('index: false') && page.includes('openGraph'), 'profile metadata must be noindex with Open Graph metadata');
+assert.ok(css.includes('@media(max-width:460px)'), 'profile layout must be optimized for a 460px max viewport');
+assert.ok(client.includes('doctor-profile-error') && client.includes('profile-loading-state'), 'profile must include proper error and loading states');
+console.log('Public profile tests passed');

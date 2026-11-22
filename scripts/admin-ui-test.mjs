@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+const admin = await readFile(new URL('../src/app/page.tsx', import.meta.url), 'utf8');
+const rootLayout = await readFile(new URL('../src/app/layout.tsx', import.meta.url), 'utf8');
+const css = await readFile(new URL('../src/app/globals.css', import.meta.url), 'utf8');
+for (const feature of ['statusFilter', 'editionFilter', "QRCode.toString", "downloadQr('svg')", "downloadQr('png')", 'card.scans', 'top-logout', 'aria-label="تصفية حسب حالة الكارت"', 'bulkOpen']) assert.ok(admin.includes(feature), `admin UI missing ${feature}`);
+assert.ok(rootLayout.includes('dir="rtl"'), 'document root must declare RTL');
+assert.ok(/@media\s*\(max-width:\s*800px\)/.test(css) && css.includes('.top-logout'), 'logout must remain visible in mobile layout');
+assert.ok(css.includes('.toast.error'), 'error toast style must be defined');
+console.log('Admin RTL and operations UI tests passed');

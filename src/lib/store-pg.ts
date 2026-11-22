@@ -14,16 +14,17 @@ CREATE TABLE IF NOT EXISTS dc_cards (
   clinic_address text NOT NULL DEFAULT '', maps_url text NOT NULL DEFAULT '', website text NOT NULL DEFAULT '', bio text NOT NULL DEFAULT '',
   edition text NOT NULL DEFAULT 'STANDARD', status text NOT NULL DEFAULT 'ACTIVE', distribution_status text NOT NULL DEFAULT 'NOT_DISTRIBUTED',
   distributed_at timestamptz, consent_profile boolean NOT NULL DEFAULT false, consent_photo boolean NOT NULL DEFAULT false,
-  created_at timestamptz NOT NULL DEFAULT now()
+  portrait_data text, created_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE dc_cards ADD COLUMN IF NOT EXISTS portrait_data text;
 CREATE TABLE IF NOT EXISTS dc_scans (card_id uuid NOT NULL REFERENCES dc_cards(id) ON DELETE CASCADE, at timestamptz NOT NULL DEFAULT now());
 CREATE INDEX IF NOT EXISTS dc_scans_at ON dc_scans(at);
 CREATE TABLE IF NOT EXISTS dc_monthly (card_id uuid NOT NULL REFERENCES dc_cards(id) ON DELETE CASCADE, month text NOT NULL, count integer NOT NULL DEFAULT 0, PRIMARY KEY (card_id, month));`;
 
-const COL: Record<string, string> = { doctorNameAr: 'doctor_name_ar', doctorNameEn: 'doctor_name_en', specialty: 'specialty', phone: 'phone', whatsapp: 'whatsapp', email: 'email', clinicAddress: 'clinic_address', mapsUrl: 'maps_url', website: 'website', bio: 'bio', edition: 'edition', status: 'status', distributionStatus: 'distribution_status', consentProfile: 'consent_profile', consentPhoto: 'consent_photo' };
+const COL: Record<string, string> = { doctorNameAr: 'doctor_name_ar', doctorNameEn: 'doctor_name_en', specialty: 'specialty', phone: 'phone', whatsapp: 'whatsapp', email: 'email', clinicAddress: 'clinic_address', mapsUrl: 'maps_url', website: 'website', bio: 'bio', portraitData: 'portrait_data', edition: 'edition', status: 'status', distributionStatus: 'distribution_status', consentProfile: 'consent_profile', consentPhoto: 'consent_photo' };
 const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : v ? new Date(String(v)).toISOString() : undefined);
 function toCard(r: Record<string, unknown>): DoctorCard {
-  return { id: String(r.id), token: String(r.token), serial: String(r.serial), doctorNameAr: String(r.doctor_name_ar), doctorNameEn: String(r.doctor_name_en), specialty: String(r.specialty), phone: String(r.phone), whatsapp: String(r.whatsapp), email: String(r.email), clinicAddress: String(r.clinic_address), mapsUrl: String(r.maps_url), website: String(r.website), bio: String(r.bio), edition: r.edition as DoctorCard['edition'], status: r.status as DoctorCard['status'], distributionStatus: r.distribution_status as DoctorCard['distributionStatus'], distributedAt: iso(r.distributed_at), consentProfile: Boolean(r.consent_profile), consentPhoto: Boolean(r.consent_photo), createdAt: iso(r.created_at)! };
+  return { id: String(r.id), token: String(r.token), serial: String(r.serial), doctorNameAr: String(r.doctor_name_ar), doctorNameEn: String(r.doctor_name_en), specialty: String(r.specialty), phone: String(r.phone), whatsapp: String(r.whatsapp), email: String(r.email), clinicAddress: String(r.clinic_address), mapsUrl: String(r.maps_url), website: String(r.website), bio: String(r.bio), portraitData: r.portrait_data == null ? null : String(r.portrait_data), edition: r.edition as DoctorCard['edition'], status: r.status as DoctorCard['status'], distributionStatus: r.distribution_status as DoctorCard['distributionStatus'], distributedAt: iso(r.distributed_at), consentProfile: Boolean(r.consent_profile), consentPhoto: Boolean(r.consent_photo), createdAt: iso(r.created_at)! };
 }
 
 export function createPgStore(query: Query) {
@@ -39,10 +40,36 @@ export function createPgStore(query: Query) {
       await init();
       const prefix = input.edition === 'LIMITED' ? 'AZM-L' : input.edition === 'DEMO' ? 'AZM-D' : 'AZM-S';
       const { rows } = await query(
-        `INSERT INTO dc_cards (id, token, serial, doctor_name_ar, doctor_name_en, specialty, phone, whatsapp, email, clinic_address, maps_url, website, bio, edition, consent_profile, consent_photo)
-         VALUES ($1,$2,$3 || lpad(nextval('dc_serial_seq')::text, 3, '0'),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
-        [randomUUID(), randomBytes(24).toString('base64url'), prefix, input.doctorNameAr, input.doctorNameEn, input.specialty, input.phone, input.whatsapp, input.email, input.clinicAddress, input.mapsUrl, input.website, input.bio, input.edition, input.consentProfile, input.consentPhoto]);
+        `INSERT INTO dc_cards (id, token, serial, doctor_name_ar, doctor_name_en, specialty, phone, whatsapp, email, clinic_address, maps_url, website, bio, edition, consent_profile, consent_photo, portrait_data)
+         VALUES ($1,$2,$3 || lpad(nextval('dc_serial_seq')::text, 3, '0'),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
+        [randomUUID(), randomBytes(24).toString('base64url'), prefix, input.doctorNameAr, input.doctorNameEn, input.specialty, input.phone, input.whatsapp, input.email, input.clinicAddress, input.mapsUrl, input.website, input.bio, input.edition, input.consentProfile, input.consentPhoto, input.portraitData]);
       return toCard(rows[0]);
+    },
+    async createBlankCards(count: number) {
+      await init();
+      const values: string[] = []; const params: unknown[] = [];
+      for (let i = 0; i < count; i += 1) {
+        const offset = params.length;
+        params.push(randomUUID(), randomBytes(24).toString('base64url'));
+        values.push(`($${offset + 1},$${offset + 2},'AZM-S'||lpad(nextval('dc_serial_seq')::text,3,'0'),'','STANDARD','UNCLAIMED')`);
+      }
+      const { rows } = await query(`INSERT INTO dc_cards (id,token,serial,doctor_name_ar,edition,status) VALUES ${values.join(',')} RETURNING *`, params);
+      return rows.map(toCard);
+    },
+    async getUnclaimedCard(token: string) {
+      await init();
+      const { rows } = await query(`SELECT id,serial FROM dc_cards WHERE token = $1 AND status = 'UNCLAIMED'`, [token]);
+      if (!rows[0]) return null;
+      const id = String(rows[0].id);
+      await query(`INSERT INTO dc_monthly (card_id,month,count) VALUES ($1,to_char(now() at time zone 'utc','YYYY-MM'),1) ON CONFLICT (card_id,month) DO UPDATE SET count = dc_monthly.count + 1`, [id]);
+      await query(`INSERT INTO dc_scans (card_id) VALUES ($1)`, [id]);
+      await query(`DELETE FROM dc_scans WHERE at < now() - interval '60 days'`);
+      return { serial: String(rows[0].serial) };
+    },
+    async claimUnclaimedCard(token: string, profile: Omit<DoctorCard, 'id' | 'token' | 'serial' | 'edition' | 'status' | 'distributionStatus' | 'distributedAt' | 'createdAt' | 'consentProfile' | 'scans'>) {
+      await init();
+      const { rows } = await query(`UPDATE dc_cards SET doctor_name_ar=$2,doctor_name_en=$3,specialty=$4,phone=$5,whatsapp=$6,email=$7,clinic_address=$8,maps_url=$9,website=$10,bio=$11,portrait_data=$12,consent_photo=$13,consent_profile=true,status='ACTIVE' WHERE token=$1 AND status='UNCLAIMED' RETURNING *`, [token, profile.doctorNameAr, profile.doctorNameEn, profile.specialty, profile.phone, profile.whatsapp, profile.email, profile.clinicAddress, profile.mapsUrl, profile.website, profile.bio, profile.portraitData, profile.consentPhoto]);
+      return rows[0] ? toCard(rows[0]) : null;
     },
     async updateCard(token: string, patch: Patch) {
       await init();
@@ -55,10 +82,15 @@ export function createPgStore(query: Query) {
     },
     async getCardForPrint(token: string) {
       await init();
-      const { rows } = await query(`SELECT * FROM dc_cards WHERE token = $1 AND status = 'ACTIVE' AND consent_profile`, [token]);
+      const { rows } = await query(`SELECT * FROM dc_cards WHERE token = $1 AND (status = 'UNCLAIMED' OR (status = 'ACTIVE' AND consent_profile))`, [token]);
       if (!rows[0]) return null;
       const c = toCard(rows[0]);
-      return { doctorNameAr: c.doctorNameAr, doctorNameEn: c.doctorNameEn, specialty: c.specialty, serial: c.serial, token: c.token, edition: c.edition };
+      return { doctorNameAr: c.doctorNameAr, doctorNameEn: c.doctorNameEn, specialty: c.specialty, serial: c.serial, token: c.token, edition: c.edition, status: c.status, portraitData: c.consentPhoto ? c.portraitData : null };
+    },
+    async getPublicCardSnapshot(token: string) {
+      await init();
+      const { rows } = await query(`SELECT * FROM dc_cards WHERE token = $1 AND status = 'ACTIVE' AND consent_profile`, [token]);
+      return rows[0] ? toCard(rows[0]) : null;
     },
     async getPublicCard(token: string) {
       await init();

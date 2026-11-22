@@ -1,26 +1,72 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
-import { Printer, ArrowRight, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Printer, ShieldCheck } from 'lucide-react';
+import '../print.css';
+import { printQrUrl, QR_PRINT, SHEET_LAYOUTS } from '@/lib/print-spec';
 
-type PrintCard = { doctorNameAr: string; doctorNameEn: string; specialty: string; serial: string; token: string; edition: string };
+type PrintCard = { doctorNameAr: string; doctorNameEn: string; specialty: string; serial: string; token: string; edition: string; status: 'UNCLAIMED' | 'ACTIVE' | 'SUSPENDED'; portraitData?: string | null };
+type SheetSize = 'single' | 'a4' | 'a5';
+const demoCopy = 'نسخة تجريبية — لو عاوز نسخة خاصة تواصل معانا';
+
 export default function PrintProof({ params }: { params: Promise<{ token: string }> }) {
   const [card, setCard] = useState<PrintCard | null>(null);
   const [qr, setQr] = useState('');
   const [error, setError] = useState(false);
+  const [bleed, setBleed] = useState(true);
+  const [cropMarks, setCropMarks] = useState(true);
+  const [sheet, setSheet] = useState<SheetSize>('single');
+  const [origin, setOrigin] = useState('');
+
   useEffect(() => {
     let alive = true;
+    setOrigin(window.location.origin);
     void params.then(async ({ token }) => {
       const response = await fetch(`/api/cards/${token}?mode=print`, { cache: 'no-store' });
       if (!response.ok) throw new Error('unavailable');
       const data = await response.json() as PrintCard;
-      const png = await QRCode.toDataURL(`${location.origin}/c/${data.token}`, { width: 420, margin: 1, color: { dark: '#193c31', light: '#ffffff' } });
+      const png = await QRCode.toDataURL(printQrUrl(window.location.origin, data.token), { width: 900, margin: QR_PRINT.renderMarginModules, errorCorrectionLevel: QR_PRINT.errorCorrectionLevel, color: { dark: '#080710', light: '#ffffff' } });
       if (alive) { setCard(data); setQr(png); }
     }).catch(() => { if (alive) setError(true); });
     return () => { alive = false; };
   }, [params]);
-  if (error) return <main className="print-error"><h1>تعذر فتح معاينة الطباعة</h1><a href="/">العودة للوحة التحكم</a></main>;
-  if (!card) return <main className="print-error">جارٍ تجهيز المعاينة...</main>;
-  return <main className="print-workspace"><header className="print-toolbar"><a href="/" className="back-link"><ArrowRight size={16}/> رجوع للوحة</a><div className="proof-warning"><ShieldCheck size={16}/> إثبات تصميم فقط — إعدادات المطبعة لم تعتمد بعد</div><button onClick={() => window.print()}><Printer size={17}/> طباعة / حفظ PDF</button></header><div className="proof-title"><span>PRINT PROOF · {card.serial}</span><h1>معاينة الكارت — 90 × 55 مم</h1><p>مقاس فعلي بدون bleed. راجع عينة المطبعة قبل اعتماد ملفات الإنتاج.</p></div><section className="proof-cards"><div><small>01 · الوجه الأمامي</small><article className="proof-card proof-front"><div className="proof-front-brand"><i/> DOCTOR CARDS <span>{card.edition === 'DEMO' ? 'SAMPLE' : card.edition}</span></div><div className="proof-doctor"><b>{card.doctorNameAr}</b>{card.doctorNameEn && <span dir="ltr">{card.doctorNameEn}</span>}{card.specialty && <small>{card.specialty}</small>}</div><div className="proof-front-foot"><span>PROFILE · CONNECT · SHARE</span><span>{card.serial}</span></div>{card.edition === 'DEMO' && <div className="proof-demo">نسخة تجريبية — لو عاوز نسخة خاصة تواصل معانا</div>}</article></div><div><small>02 · الوجه الخلفي</small><article className="proof-card proof-back"><div className="proof-back-top"><b>تواصل بسهولة</b><span>ملفك التعريفي في مكان واحد</span></div><div className="proof-qr-wrap"><img src={qr} alt="QR code"/><span>امسح الكود لعرض البروفايل</span></div><div className="proof-back-foot">{card.serial}<span>90 × 55 MM</span></div></article></div></section><p className="proof-footnote">هذه المعاينة لا تشمل bleed أو علامات قص أو إعداد ألوان. اطبع بالحجم الفعلي 100% عند اختبار العينة.</p><style jsx global>{`@page{size:90mm 55mm;margin:0}@media print{html,body{background:#fff!important}.print-workspace{padding:0!important;background:#fff!important}.print-toolbar,.proof-title,.proof-cards>div>small,.proof-footnote{display:none!important}.proof-cards{display:block!important;margin:0!important}.proof-cards>div{display:block!important}.proof-card{width:90mm!important;height:55mm!important;margin:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;page-break-after:always;break-after:page}.proof-card:last-child{page-break-after:auto;break-after:auto}.proof-demo{font-size:6pt!important}}`}</style></main>;
+
+  const shortUrl = useMemo(() => card && origin ? printQrUrl(origin, card.token) : '', [card, origin]);
+  if (error) return <main className="print-proof-page"><div className="print-error"><h1>تعذر فتح معاينة الطباعة</h1><a href="/">العودة للوحة التحكم</a></div></main>;
+  if (!card || !qr) return <main className="print-proof-page"><div className="print-error">جارٍ تجهيز المعاينة...</div></main>;
+
+  const count = sheet === 'a4' ? SHEET_LAYOUTS.A4.cardsPerSheet : sheet === 'a5' ? SHEET_LAYOUTS.A5.cardsPerSheet : 1;
+  const noBleed = bleed ? '' : 'no-bleed';
+  const crop = cropMarks ? <CropMarks bleed={bleed}/> : null;
+  return <main className={`print-proof-page ${sheet === 'single' ? 'single-proof' : 'sheet-mode'} ${noBleed}`}>
+    <header className="proof-toolbar">
+      <a href="/"><ArrowRight size={16}/> رجوع للوحة</a>
+      <label>ورقة الطباعة <select value={sheet} onChange={(e) => setSheet(e.target.value as SheetSize)}><option value="single">كارت واحد</option><option value="a4">A4 · 8 كروت</option><option value="a5">A5 · 3 كروت</option></select></label>
+      <label className="check-control"><input type="checkbox" checked={bleed} onChange={(e) => setBleed(e.target.checked)}/> 3 مم Bleed</label>
+      <label className="check-control"><input type="checkbox" checked={cropMarks} onChange={(e) => setCropMarks(e.target.checked)}/> علامات قص</label>
+      <button className="print-action" onClick={() => window.print()}><Printer size={16}/> طباعة / حفظ PDF</button>
+    </header>
+    <section className="proof-heading"><h1>معاينة الطباعة · {card.serial}</h1><p>المقاس النهائي 85 × 55 مم. اختر ورقة الطباعة ثم راجع إثبات الطباعة.</p></section>
+    <div className="proof-notice"><ShieldCheck size={15} style={{ verticalAlign: 'middle', marginInlineEnd: 5 }}/> إثبات بصري أولي؛ راجع معايرة المطبعة واتجاه الوجهين قبل اعتماد الإنتاج.</div>
+    {sheet === 'single' ? <section className="proof-sides">
+      <div className="proof-side"><span className="proof-side-title">01 · الوجه الأمامي</span><CardFace side="front" card={card} qr={qr} shortUrl={shortUrl} bleed={bleed}>{crop}</CardFace></div>
+      <div className="proof-side"><span className="proof-side-title">02 · الوجه الخلفي</span><CardFace side="back" card={card} qr={qr} shortUrl={shortUrl} bleed={bleed}>{crop}</CardFace></div>
+    </section> : <section className="sheet-preview">
+      <div className={`sheet-page ${sheet === 'a5' ? 'a5' : ''} ${noBleed}`} aria-label={`${sheet.toUpperCase()} front imposition`}>
+        {Array.from({ length: count }, (_, index) => <div className="sheet-cell" key={`front-${index}`}><CardFace side="front" card={card} qr={qr} shortUrl={shortUrl} bleed={bleed}>{crop}</CardFace></div>)}
+      </div>
+      <div className={`sheet-page sheet-back-page ${sheet === 'a5' ? 'a5' : ''} ${noBleed}`} aria-label={`${sheet.toUpperCase()} back imposition`}>
+        {Array.from({ length: count }, (_, index) => <div className="sheet-cell" key={`back-${index}`}><CardFace side="back" card={card} qr={qr} shortUrl={shortUrl} bleed={bleed}>{crop}</CardFace></div>)}
+      </div>
+    </section>}
+    <p className="proof-footnote">{count} كروت بالورقة · أمام وظهر بترتيب متطابق للطباعة على الوجهين · {bleed ? '3 مم نزف حول كل كارت' : 'بدون Bleed'}.</p>
+  </main>;
 }
+
+function CardFace({ side, card, qr, shortUrl, bleed, children }: { side: 'front' | 'back'; card: PrintCard; qr: string; shortUrl: string; bleed: boolean; children: React.ReactNode }) {
+  return <div className={`card-bleed bleed-${side}`}><article className={`card-trim card-${side}`}>
+    {side === 'front' ? <><div className="front-copy"><div className="front-brand"><i/> DOCTOR CARDS</div><div className="front-name-ar">{card.status === 'UNCLAIMED' ? 'بطاقة طبيب' : card.doctorNameAr || 'اسم الطبيب'}</div>{card.status === 'UNCLAIMED' ? <div className="front-name-en">SCAN TO CLAIM YOUR PROFILE</div> : card.doctorNameEn && <div className="front-name-en">{card.doctorNameEn}</div>}{card.specialty && <div className="front-specialty">{card.specialty}</div>}{card.edition === 'DEMO' && <div className="front-edition">SAMPLE EDITION</div>}</div><div className="portrait-panel">{card.portraitData ? <img src={card.portraitData} alt="Doctor portrait"/> : <div className="portrait-fallback">صورة<br/>الدكتور</div>}</div>{card.edition === 'DEMO' && <div className="demo-ribbon">{demoCopy}</div>}</> : <><div className="back-qr-frame"><img src={qr} alt="QR code"/></div><div className="back-copy"><div className="back-kicker">DOCTOR CARDS</div><div className="back-cta">SCAN TO CONNECT<br/>امسح للتواصل</div><div className="back-url">{shortUrl}</div><div className="back-serial">{card.serial}</div></div></>}
+  </article>{children}{!bleed && <span className="trim-size-label">85 × 55 mm</span>}</div>;
+}
+function CropMarks({ bleed }: { bleed: boolean }) { const path = bleed ? 'M0 3H2 M3 0V2 M89 3H91 M88 0V2 M0 58H2 M3 59V61 M89 58H91 M88 59V61' : 'M-2 0H0 M0 -2V0 M85 0H87 M85 -2V0 M-2 55H0 M0 55V57 M85 55H87 M85 55V57'; return <svg className="crop-overlay" viewBox={bleed ? '0 0 91 61' : '0 0 85 55'} preserveAspectRatio="none" aria-hidden="true"><path d={path} fill="none" stroke="#111" strokeWidth=".18" vectorEffect="non-scaling-stroke"/></svg>; }
