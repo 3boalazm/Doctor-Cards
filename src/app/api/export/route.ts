@@ -4,7 +4,6 @@ import { verifySession } from '@/lib/auth';
 export const runtime = 'nodejs';
 function cell(value: unknown) { return `"${String(value ?? '').replaceAll('"', '""')}"`; }
 export async function GET(request: Request) {
-  if (process.env.NODE_ENV === 'production') return NextResponse.json({ error: 'النسخة الحالية للتطوير المحلي فقط.' }, { status: 503 });
   if (!verifySession(request)) return NextResponse.json({ error: 'سجل الدخول أولاً.' }, { status: 401 });
   const cards = await listCards();
   const rows = [['الاسم بالعربي', 'الاسم بالإنجليزي', 'التخصص', 'السيريال', 'الإصدار', 'الحالة', 'التوزيع', 'عدد المسحات', 'تاريخ الإنشاء'], ...cards.map((card) => [card.doctorNameAr, card.doctorNameEn, card.specialty, card.serial, card.edition, card.status, card.distributionStatus, card.scans, card.createdAt])];

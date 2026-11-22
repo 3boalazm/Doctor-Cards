@@ -1,0 +1,21 @@
+// Runs the Postgres store against an in-memory PGlite (real Postgres engine, no server needed).
+import assert from 'node:assert/strict';
+import { PGlite } from '@electric-sql/pglite';
+import { createPgStore } from '../src/lib/store-pg.ts';
+const db = new PGlite();
+const store = createPgStore(async (t, p) => p?.length ? db.query(t, p) : { rows: ((await db.exec(t)).at(-1)?.rows ?? []) });
+const base = { doctorNameEn: '', specialty: 'x', phone: '', whatsapp: '', email: '', clinicAddress: '', mapsUrl: '', website: '', bio: '', consentPhoto: false };
+const a = await store.createCard({ ...base, doctorNameAr: 'أ', edition: 'STANDARD', consentProfile: true });
+const b = await store.createCard({ ...base, doctorNameAr: 'ب', edition: 'LIMITED', consentProfile: true });
+assert.equal(a.serial, 'AZM-S001'); assert.equal(b.serial, 'AZM-L002'); assert.match(a.token, /^[A-Za-z0-9_-]{32}$/);
+assert.equal((await store.getPublicCard(a.token)).doctorNameAr, 'أ');
+await store.getPublicCard(a.token);
+assert.equal((await store.listCards()).find((c) => c.id === a.id).scans, 2);
+assert.equal((await store.updateCard(a.token, { status: 'SUSPENDED' })).status, 'SUSPENDED');
+assert.equal(await store.getPublicCard(a.token), null);
+assert.equal(await store.getCardForPrint(a.token), null);
+const d = await store.updateCard(b.token, { distributionStatus: 'DISTRIBUTED' });
+assert.ok(d.distributedAt);
+assert.equal(await store.updateCard('nope', { status: 'ACTIVE' }), null);
+await store.cleanupExpiredScans();
+console.log('PG store tests passed');
