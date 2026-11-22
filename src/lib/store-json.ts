@@ -18,7 +18,7 @@ export type DoctorCard = {
   serial: string;
   token: string;
   edition: 'STANDARD' | 'LIMITED' | 'DEMO';
-  status: 'ACTIVE' | 'SUSPENDED';
+  status: 'UNCLAIMED' | 'ACTIVE' | 'SUSPENDED';
   distributionStatus: 'NOT_DISTRIBUTED' | 'DISTRIBUTED';
   distributedAt?: string;
   consentProfile: boolean;
@@ -72,6 +72,36 @@ export async function createCard(input: Omit<DoctorCard, 'id' | 'token' | 'creat
     store.cards.unshift(card); return card;
   });
 }
+export async function createBlankCards(count: number) {
+  return mutate((store) => {
+    const start = store.cards.length;
+    const cards = Array.from({ length: count }, (_, index): DoctorCard => ({
+      id: randomUUID(), token: randomBytes(24).toString('base64url'), serial: `AZM-S${String(start + index + 1).padStart(3, '0')}`,
+      doctorNameAr: '', doctorNameEn: '', specialty: '', phone: '', whatsapp: '', email: '', clinicAddress: '', mapsUrl: '', website: '', bio: '', portraitData: null,
+      edition: 'STANDARD', status: 'UNCLAIMED', distributionStatus: 'NOT_DISTRIBUTED', consentProfile: false, consentPhoto: false, createdAt: new Date().toISOString(),
+    }));
+    store.cards.unshift(...cards);
+    return cards;
+  });
+}
+export async function getUnclaimedCard(token: string) {
+  return mutate((store) => {
+    const card = store.cards.find((item) => item.token === token && item.status === 'UNCLAIMED');
+    if (!card) return null;
+    const now = new Date(); const month = now.toISOString().slice(0, 7); const key = `${card.id}:${month}`;
+    store.monthly[key] = (store.monthly[key] ?? 0) + 1; store.scans.push({ cardId: card.id, at: now.toISOString() }); pruneEvents(store, now.getTime());
+    return { serial: card.serial };
+  });
+}
+type ClaimInput = Pick<DoctorCard, 'doctorNameAr' | 'doctorNameEn' | 'specialty' | 'phone' | 'whatsapp' | 'email' | 'clinicAddress' | 'mapsUrl' | 'website' | 'bio' | 'portraitData' | 'consentPhoto'>;
+export async function claimUnclaimedCard(token: string, profile: ClaimInput) {
+  return mutate((store) => {
+    const card = store.cards.find((item) => item.token === token && item.status === 'UNCLAIMED');
+    if (!card) return null;
+    Object.assign(card, profile, { consentProfile: true, status: 'ACTIVE' as const });
+    return card;
+  });
+}
 export async function updateCard(token: string, patch: Partial<Pick<DoctorCard, 'doctorNameAr' | 'doctorNameEn' | 'specialty' | 'phone' | 'whatsapp' | 'email' | 'clinicAddress' | 'mapsUrl' | 'website' | 'bio' | 'portraitData' | 'edition' | 'status' | 'distributionStatus' | 'consentProfile' | 'consentPhoto'>>) {
   return mutate((store) => {
     const card = store.cards.find((item) => item.token === token); if (!card) return null;
@@ -82,9 +112,9 @@ export async function updateCard(token: string, patch: Partial<Pick<DoctorCard, 
 }
 export async function getCardForPrint(token: string) {
   const store = await readStore(); const card = store.cards.find((item) => item.token === token);
-  if (!card || card.status !== 'ACTIVE' || !card.consentProfile) return null;
-  const { doctorNameAr, doctorNameEn, specialty, serial, token: qrToken, edition, portraitData } = card;
-  return { doctorNameAr, doctorNameEn, specialty, serial, token: qrToken, edition, portraitData: card.consentPhoto ? portraitData : null };
+  if (!card || (card.status !== 'UNCLAIMED' && (card.status !== 'ACTIVE' || !card.consentProfile))) return null;
+  const { doctorNameAr, doctorNameEn, specialty, serial, token: qrToken, edition, portraitData, status } = card;
+  return { doctorNameAr, doctorNameEn, specialty, serial, token: qrToken, edition, status, portraitData: card.consentPhoto ? portraitData : null };
 }
 export async function getPublicCardSnapshot(token: string) {
   const store = await readStore();

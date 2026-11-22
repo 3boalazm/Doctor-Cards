@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import { ArrowUpRight, AtSign, BriefcaseBusiness, ContactRound, Languages, MapPin, Share2, Smartphone, Stethoscope, UserRound, MessageCircle, Globe2 } from 'lucide-react';
 import './profile.css';
+import ClaimForm from './claim-form';
 
-type Profile = { doctorNameAr: string; doctorNameEn: string; specialty: string; phone: string; whatsapp: string; email: string; clinicAddress: string; mapsUrl: string; website: string; bio: string; portraitData?: string | null };
+type Profile = { state?: 'ACTIVE' | 'UNCLAIMED'; serial?: string; doctorNameAr: string; doctorNameEn: string; specialty: string; phone: string; whatsapp: string; email: string; clinicAddress: string; mapsUrl: string; website: string; bio: string; portraitData?: string | null };
 type Locale = 'ar' | 'en';
 const copy = {
   ar: { profile: 'الملف التعريفي', share: 'مشاركة', save: 'حفظ جهة الاتصال', call: 'اتصال', whatsapp: 'واتساب', email: 'البريد الإلكتروني', map: 'موقع العيادة', website: 'الموقع الإلكتروني', bio: 'نبذة', disclaimer: 'معلومات التواصل منشورة بموافقة صاحب البروفايل', loading: 'جارٍ تحميل البروفايل...', missing: 'الصفحة غير متاحة', missingHint: 'قد يكون الرابط غير صحيح أو تم إيقاف هذه البطاقة.', powered: 'ملف رقمي للطبيب' },
@@ -33,6 +34,7 @@ export default function ProfileClient({ token }: { token: string }) {
       else { await navigator.clipboard.writeText(location.href); setShareNotice(locale === 'ar' ? 'تم نسخ الرابط' : 'Link copied'); window.setTimeout(() => setShareNotice(''), 2200); }
     } catch { /* user canceled native share */ }
   };
+  if (profile?.state === 'UNCLAIMED') return <ClaimForm token={token} serial={profile.serial || ''} locale={locale} onClaimed={setProfile}/>;
   if (missing) return <main className="doctor-profile-page" dir={locale === 'ar' ? 'rtl' : 'ltr'} lang={locale}><header className="doctor-profile-top"><Brand/></header><section className="doctor-profile-error"><div className="error-code">404</div><h1>{t.missing}</h1><p>{t.missingHint}</p><Brand/></section></main>;
   if (!profile) return <main className="doctor-profile-page" dir={locale === 'ar' ? 'rtl' : 'ltr'} lang={locale}><div className="profile-loading-state"><span className="brand-mark"><Stethoscope size={20}/></span><b>{t.loading}</b></div></main>;
 

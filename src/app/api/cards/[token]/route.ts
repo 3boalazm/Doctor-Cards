@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getCardForPrint, getPublicCard, updateCard } from '@/lib/store';
+import { getCardForPrint, getPublicCard, getUnclaimedCard, updateCard } from '@/lib/store';
 import { verifySession } from '@/lib/auth';
 import { validatePortraitData } from '@/lib/portrait-validation';
 
@@ -14,10 +14,12 @@ export async function GET(request: Request, context: { params: Promise<{ token: 
     if (!card) return NextResponse.json({ error: 'الكارت غير متاح.' }, { status: 404 });
     return NextResponse.json(card);
   }
+  const unclaimed = await getUnclaimedCard(token);
+  if (unclaimed) return NextResponse.json({ state: 'UNCLAIMED', serial: unclaimed.serial });
   const card = await getPublicCard(token);
   if (!card) return NextResponse.json({ error: 'البروفايل غير متاح حاليًا.' }, { status: 404 });
   const { doctorNameAr, doctorNameEn, specialty, phone, whatsapp, email, clinicAddress, mapsUrl, website, bio } = card;
-  return NextResponse.json({ doctorNameAr, doctorNameEn, specialty, phone, whatsapp, email, clinicAddress, mapsUrl, website, bio, portraitData: card.consentPhoto ? card.portraitData : null });
+  return NextResponse.json({ state: 'ACTIVE', doctorNameAr, doctorNameEn, specialty, phone, whatsapp, email, clinicAddress, mapsUrl, website, bio, portraitData: card.consentPhoto ? card.portraitData : null });
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ token: string }> }) {

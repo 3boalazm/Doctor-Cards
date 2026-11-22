@@ -19,6 +19,14 @@ assert.equal(await store.getCardForPrint(a.token), null);
 const d = await store.updateCard(b.token, { distributionStatus: 'DISTRIBUTED' });
 assert.ok(d.distributedAt);
 assert.equal(await store.updateCard('nope', { status: 'ACTIVE' }), null);
+const blanks = await store.createBlankCards(3);
+assert.equal(blanks.length, 3); assert.ok(blanks.every((card) => card.status === 'UNCLAIMED' && !card.doctorNameAr));
+const unclaimed = await store.getUnclaimedCard(blanks[0].token); assert.equal(unclaimed.serial, blanks[0].serial);
+assert.equal((await store.getCardForPrint(blanks[0].token)).status, 'UNCLAIMED');
+const claim = { doctorNameAr: 'تفعيل', doctorNameEn: '', specialty: '', phone: '', whatsapp: '', email: '', clinicAddress: '', mapsUrl: '', website: '', bio: '', portraitData: null, consentPhoto: false };
+assert.equal((await store.claimUnclaimedCard(blanks[0].token, claim)).status, 'ACTIVE');
+assert.equal(await store.getUnclaimedCard(blanks[0].token), null);
+assert.equal(await store.claimUnclaimedCard(blanks[0].token, claim), null, 'claim must be one-time');
 await store.cleanupExpiredScans();
 // Simulate an existing pre-portrait schema: CREATE TABLE IF NOT EXISTS leaves it intact,
 // then the idempotent ALTER TABLE migration must add the new column.

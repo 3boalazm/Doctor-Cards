@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 
 const base = process.env.TEST_BASE_URL || 'http://localhost:3000';
-let createdToken;
+const createdTokens = [];
 try {
   const login = await fetch(`${base}/api/auth`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: process.env.ADMIN_PASSWORD || 'doctorcards-preview-only' }) });
   assert.equal(login.status, 200, 'local admin login should succeed');
@@ -15,7 +15,7 @@ try {
   assert.equal(invalid.status, 400, 'profile publication must require recorded consent');
   const create = await fetch(`${base}/api/cards`, { method: 'POST', headers, body: JSON.stringify({ doctorNameAr: 'اختبار تكاملي', doctorNameEn: 'Integration Test', specialty: 'اختبار', phone: '+201000000000', email: 'test@example.test', portraitData: 'data:image/jpeg;base64,/9j/2Q==', edition: 'DEMO', consentProfile: true, consentPhoto: true }) });
   assert.equal(create.status, 201, 'authorized admin should create a demo card');
-  const card = await create.json(); createdToken = card.token;
+  const card = await create.json(); createdTokens.push(card.token);
   assert.match(card.serial, /^AZM-D\d{3}$/);
   assert.match(card.token, /^[A-Za-z0-9_-]{32}$/);
   const profileResponse = await fetch(`${base}/api/cards/${card.token}`);
@@ -42,15 +42,30 @@ try {
   assert.equal(reactivate.status, 200);
   const distribution = await fetch(`${base}/api/cards/${card.token}`, { method: 'PATCH', headers, body: JSON.stringify({ action: 'toggle-distribution', distributionStatus: 'DISTRIBUTED' }) });
   assert.equal(distribution.status, 200);
-  console.log('Smoke tests passed: login, access control, consent validation, create, QR privacy, suspension, and distribution.');
+  const bulk = await fetch(`${base}/api/cards/bulk`, { method: 'POST', headers, body: JSON.stringify({ count: 2 }) });
+  assert.equal(bulk.status, 201, 'admin should bulk-generate blank cards');
+  const blankCards = (await bulk.json()).cards; assert.equal(blankCards.length, 2);
+  const blank = blankCards[0]; createdTokens.push(...blankCards.map((item) => item.token));
+  assert.equal(blank.status, 'UNCLAIMED'); assert.equal(blank.doctorNameAr, '');
+  const claimLanding = await fetch(`${base}/api/cards/${blank.token}`);
+  const claimPayload = await claimLanding.json();
+  assert.equal(claimPayload.state, 'UNCLAIMED'); assert.equal(claimPayload.serial, blank.serial);
+  const claimData = { doctorNameAr: 'طبيب مستلم', doctorNameEn: 'Claimed Doctor', specialty: 'باطنة', phone: '+201111111111', consentProfile: true };
+  const claimed = await fetch(`${base}/api/cards/${blank.token}/claim`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(claimData) });
+  assert.equal(claimed.status, 200, 'doctor may claim a blank card after explicit consent');
+  const claimedProfile = await (await fetch(`${base}/api/cards/${blank.token}`)).json();
+  assert.equal(claimedProfile.state, 'ACTIVE'); assert.equal(claimedProfile.doctorNameAr, 'طبيب مستلم');
+  const duplicateClaim = await fetch(`${base}/api/cards/${blank.token}/claim`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(claimData) });
+  assert.equal(duplicateClaim.status, 409, 'a card must not be claimed twice');
+  console.log('Smoke tests passed: auth, create, portrait, QR privacy, suspension, distribution, bulk blank generation, and claim flow.');
 } finally {
   // Remove only the synthetic test record; never mutate the demo or operational records.
-  if (createdToken) {
+  if (createdTokens.length) {
     try {
       const file = new URL('../.data/store.json', import.meta.url);
       const store = JSON.parse(await readFile(file, 'utf8'));
-      const removed = store.cards.filter((item) => item.token === createdToken).map((item) => item.id);
-      store.cards = store.cards.filter((item) => item.token !== createdToken);
+      const removed = store.cards.filter((item) => createdTokens.includes(item.token)).map((item) => item.id);
+      store.cards = store.cards.filter((item) => !createdTokens.includes(item.token));
       store.scans = store.scans.filter((event) => !removed.includes(event.cardId));
       for (const key of Object.keys(store.monthly)) if (removed.some((id) => key.startsWith(`${id}:`))) delete store.monthly[key];
       await writeFile(file, JSON.stringify(store, null, 2));
