@@ -32,6 +32,7 @@ try {
   await run(process.execPath, ['scripts/print-layout-test.mjs'], env);
   await run(process.execPath, ['scripts/profile-test.mjs'], env);
   await run(process.execPath, ['scripts/portrait-test.mjs'], env);
+  await run(process.execPath, ['scripts/admin-ui-test.mjs'], env);
 } finally {
   stop();
 }
