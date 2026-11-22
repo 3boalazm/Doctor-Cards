@@ -1,40 +1,72 @@
 # P1 Implementation Status
 
-**Current milestone:** First vertical-slice prototype
-**Environment:** Local development only; not approved for real doctor data or production deployment.
+**Current milestone:** P1 feature slice A–E implemented on the current branch
+**Production readiness:** Not yet approved for production card issuance. The local UI and Postgres store are implemented, but several operational/security validations remain.
 
-## Implemented
+## Delivered in this branch
 
-- Next.js + TypeScript application shell with Arabic RTL administration UI.
-- Local admin login with an HttpOnly, SameSite session cookie; admin API routes require a valid session (preview password is development-only).
-- Doctor/card creation and profile editing with required Arabic name and profile-publication consent gate; edits preserve the QR token and edition/serial pairing.
-- Server-generated opaque QR token and edition-prefixed serial.
-- Public `/c/{token}` profile route, responsive rendering, and safe limited public payload.
-- Scan counter aggregated by card and UTC calendar month; expired detailed in-prototype events are pruned on scan writes and a daily timer while the local Node development process is running.
-- QR preview and print-proof route at `/print/{token}`.
-- Print proof lays out front/back artwork at 90 × 55 mm and uses browser print/save-to-PDF. It is explicitly a proof, not a supplier-approved production PDF.
-- Fictional demo profile for previewing the flow.
-- Card suspension/reactivation, manual distribution-state tracking, and authenticated CSV export.
-- Integration smoke test for login, access control, consent validation, card creation, QR privacy, suspension, and distribution.
+### A. Print proof and imposition
 
-## Deliberate prototype limitations
+- `/print/{token}` now uses the dedicated real stylesheet `src/app/print/print.css`; no styled-jsx global print rules.
+- Finished trim: **85 × 55 mm**, with a toggle for 3 mm bleed and crop marks.
+- Front: orange `#FF6B47`, dark ink text, Arabic/English name, specialty, and portrait panel extending into bleed when bleed is enabled.
+- Back: dark `#080710`, 34 mm QR symbol including a 4-module quiet zone, QR error correction level Q, destination URL, serial, and “SCAN TO CONNECT / امسح للتواصل”.
+- Repeated-card A4 8-up and A5 3-up imposition, with matching front/back sheets for duplex printing.
+- **Caveat:** duplex alignment, bleed tolerance, color profile, and crop marks have not been validated against a selected printer/physical proof. The sheet repeats the same selected card; it is not a mixed-card batch imposition engine.
 
-- Persistence is a local JSON file in `.data/`; it is not PostgreSQL, is not multi-instance safe, and may not persist on serverless hosts.
-- No authentication or authorization is installed. All admin API operations must be treated as development-only.
-- No photo upload or social-link editor yet.
-- Consent is a required admin checkbox but does not yet capture a durable consent record/evidence, text version, or revocation workflow.
-- Detailed event retention currently runs when a scan is recorded, not through a monitored scheduled job; monthly totals are updated on every scan.
-- Serial allocation is suitable only for a single-process demo and needs a database uniqueness constraint and transaction before real use.
-- No final CMYK/bleed/duplex/imposition configuration until confirmed by the print supplier and proven physically.
-- Limited Edition can be tagged but its handcraft production workflow is not automated.
+### B. Public doctor profile
 
-## Work required before production
+- Responsive profile page with saved AR/EN preference, consented portrait, share, call, WhatsApp, email, maps, and website actions.
+- Save Contact downloads a vCard 3.0 with CRLF line endings and line folding.
+- Dynamic Open Graph metadata; public doctor profiles are `noindex`.
+- Loading and unavailable states are explicit; layout is mobile-first at a 460 px maximum breakpoint.
 
-1. Replace JSON storage with PostgreSQL + Prisma schema, migrations, transactions, and unique constraints.
-2. Add admin authentication, server-side role checks, rate limits, CSRF-safe mutations, and audit logging.
-3. Replace consent checkbox-only behavior with explicit consent records, scope (profile/photo), source/version/timestamps, revocation, and publish/unpublish enforcement.
-4. Add a robust 60-day scheduled event purge with monitoring, retries, and tests; retain per-card monthly aggregates.
-5. Add photo handling and structured, validated social links as specified.
-6. Implement card suspension/revocation and editable profile lifecycle in the admin UI.
-7. Agree with the print supplier on bleed, safe area, color, duplex, imposition, fonts, and PDF requirements; validate a physical proof before labeling any export print-ready.
-8. Add automated tests for API validation, public-data privacy, QR flow, retention, access control, and print dimensions.
+### C. Portrait upload
+
+- Admin upload resizes and encodes portraits as JPEG, max edge 512 px and max payload 150 KB.
+- Upload and public rendering require photo consent; revoking the checkbox removes the saved portrait from publication.
+- PostgreSQL stores the data URI in `portrait_data`; schema initialization includes migration-safe `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` for existing installs.
+- JSON development storage normalizes older records to `portraitData: null`.
+
+### D. Unclaimed cards
+
+- Admin can bulk-generate 1–250 blank Standard cards with unique serials and unguessable QR tokens.
+- Blank card status is `UNCLAIMED`; the print proof renders a generic claim card.
+- The QR opens a claim form; submitting profile details and explicit publish consent claims the card once and transitions it to `ACTIVE`. `SUSPENDED` remains supported.
+- **Security caveat:** possession of the printed QR URL is the claim capability; there is no separate one-time activation code yet. Avoid distribution before the intended recipient receives the physical card.
+
+### E. Admin operations
+
+- Search plus filters for card status and edition.
+- Per-card monthly scan totals, copy-link, PNG/SVG QR download, print-proof link, status controls, distribution marking, and visible sign-out on desktop and mobile.
+- Empty states and success/error toast feedback; root page remains RTL.
+
+### F. Tests and validation
+
+- `npm run lint` — TypeScript check.
+- `npm run build` — Next production build.
+- `npm test` — starts a temporary local Next server and runs smoke, print-layout, profile, portrait-validation, and admin RTL/operations tests.
+- `node scripts/pg-store-test.mjs` — PGlite-backed Postgres-store tests, including legacy schema portrait migration, bulk generation, and claim-once behavior.
+
+## Current architecture and limitations
+
+- Admin identity continues to use the existing production login (`ADMIN_PASSWORD` and `AUTH_SECRET`); this branch did not change `src/lib/auth.ts` or the login flow.
+- Persistence is PostgreSQL through the `pg` package when `POSTGRES_URL` or `DATABASE_URL` exists; otherwise local development uses `.data/store.json`. The Postgres adapter uses parameterized SQL and idempotent runtime schema initialization, **not Prisma migrations**.
+- Portrait data is stored inline in a PostgreSQL text field. This meets the initial small-image requirement but can make doctor-list responses large as the card count grows; object storage and image delivery optimization remain future work.
+- The admin consent checkbox and claim confirmation are not a full durable consent-evidence/audit workflow. Add consent version, actor/source, timestamps, revocation handling, and audit records before production policy reliance.
+- Scan events are detailed for up to 60 days and monthly per-card totals are retained. The local timer is process-bound; production must run reliable scheduled retention/monitoring rather than depending on a continuously running application process.
+- Claim form is public and currently accepts the QR token as the possession proof; no activation PIN, doctor verification, or moderation queue is implemented.
+- Arabic/English toggle changes the public interface labels and doctor-name display. Specialty, biography, address, and other content are single-language inputs for now.
+- Print sheets repeat one card per position; mixed-serial batch imposition and a printer-calibrated proof are not implemented.
+- No multi-role admin system, bulk CSV import, feedback workflow, social-link fields, or advanced reports are implemented.
+- Vercel deployment still needs actual project configuration and separate Preview/Production Postgres credentials; do not point Preview to production data. Do not print production cards from a temporary preview hostname.
+
+## Required before production card issuance
+
+1. Provision and test durable Postgres for Preview and Production separately; verify backups, restore, connection pooling, schema initialization privileges, and serial uniqueness under concurrent writes.
+2. Validate the public claim policy and preferably add a separate activation code / recipient verification before blank-card distribution.
+3. Approve durable consent evidence and a documented photo/profile revocation process.
+4. Move retention to a monitored scheduled job and verify event deletion after 60 days while keeping monthly aggregates.
+5. Confirm card trim, bleed, paper, duplex flip/alignment, color, imposition, QR readability, and crop marks with the selected printer using physical proofs.
+6. Test public QR and vCard on real mobile devices and verify the final domain remains stable before any QR is printed.
+7. Review security, privacy, and operational policies with the responsible company stakeholders.
