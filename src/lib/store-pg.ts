@@ -60,6 +60,11 @@ export function createPgStore(query: Query) {
       const c = toCard(rows[0]);
       return { doctorNameAr: c.doctorNameAr, doctorNameEn: c.doctorNameEn, specialty: c.specialty, serial: c.serial, token: c.token, edition: c.edition };
     },
+    async getPublicCardSnapshot(token: string) {
+      await init();
+      const { rows } = await query(`SELECT * FROM dc_cards WHERE token = $1 AND status = 'ACTIVE' AND consent_profile`, [token]);
+      return rows[0] ? toCard(rows[0]) : null;
+    },
     async getPublicCard(token: string) {
       await init();
       const { rows } = await query(`SELECT * FROM dc_cards WHERE token = $1 AND status = 'ACTIVE' AND consent_profile`, [token]);

@@ -11,4 +11,5 @@ export const createCard = (...a: Parameters<typeof json.createCard>) => impl.cre
 export const updateCard = (...a: Parameters<typeof json.updateCard>) => impl.updateCard(...a);
 export const getCardForPrint = (...a: Parameters<typeof json.getCardForPrint>) => impl.getCardForPrint(...a);
 export const getPublicCard = (...a: Parameters<typeof json.getPublicCard>) => impl.getPublicCard(...a);
+export const getPublicCardSnapshot = (...a: Parameters<typeof json.getPublicCardSnapshot>) => impl.getPublicCardSnapshot(...a);
 export const cleanupExpiredScans = (...a: Parameters<typeof json.cleanupExpiredScans>) => impl.cleanupExpiredScans(...a);

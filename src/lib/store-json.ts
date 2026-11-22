@@ -85,6 +85,11 @@ export async function getCardForPrint(token: string) {
   const { doctorNameAr, doctorNameEn, specialty, serial, token: qrToken, edition } = card;
   return { doctorNameAr, doctorNameEn, specialty, serial, token: qrToken, edition };
 }
+export async function getPublicCardSnapshot(token: string) {
+  const store = await readStore();
+  const card = store.cards.find((item) => item.token === token);
+  return card && card.status === 'ACTIVE' && card.consentProfile ? card : null;
+}
 export async function getPublicCard(token: string) {
   return mutate((store) => {
     const card = store.cards.find((item) => item.token === token);

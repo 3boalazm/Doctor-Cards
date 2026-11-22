@@ -13,7 +13,7 @@ try {
   assert.equal(denied.status, 401, 'admin listing must reject unauthenticated requests');
   const invalid = await fetch(`${base}/api/cards`, { method: 'POST', headers, body: JSON.stringify({ doctorNameAr: 'ناقص موافقة' }) });
   assert.equal(invalid.status, 400, 'profile publication must require recorded consent');
-  const create = await fetch(`${base}/api/cards`, { method: 'POST', headers, body: JSON.stringify({ doctorNameAr: 'اختبار تكاملي', specialty: 'اختبار', edition: 'DEMO', consentProfile: true, consentPhoto: false }) });
+  const create = await fetch(`${base}/api/cards`, { method: 'POST', headers, body: JSON.stringify({ doctorNameAr: 'اختبار تكاملي', doctorNameEn: 'Integration Test', specialty: 'اختبار', phone: '+201000000000', email: 'test@example.test', edition: 'DEMO', consentProfile: true, consentPhoto: false }) });
   assert.equal(create.status, 201, 'authorized admin should create a demo card');
   const card = await create.json(); createdToken = card.token;
   assert.match(card.serial, /^AZM-D\d{3}$/);
@@ -24,6 +24,13 @@ try {
   assert.equal(profile.doctorNameAr, 'اختبار تكاملي');
   assert.equal('serial' in profile, false, 'public profile must not expose internal serial');
   assert.equal('token' in profile, false, 'public profile must not expose token');
+  const vcfResponse = await fetch(`${base}/api/cards/${card.token}/vcf`);
+  assert.equal(vcfResponse.status, 200);
+  assert.match(vcfResponse.headers.get('content-type'), /text\/vcard/);
+  const vcf = await vcfResponse.text();
+  assert.match(vcf, /VERSION:3\.0\r\n/);
+  assert.match(vcf, /FN:اختبار تكاملي \/ Integration Test\r\n/);
+  assert.match(vcf, /TEL;TYPE=WORK,VOICE:\+201000000000\r\n/);
   const suspend = await fetch(`${base}/api/cards/${card.token}`, { method: 'PATCH', headers, body: JSON.stringify({ action: 'toggle-status', status: 'SUSPENDED' }) });
   assert.equal(suspend.status, 200);
   const hidden = await fetch(`${base}/api/cards/${card.token}`);

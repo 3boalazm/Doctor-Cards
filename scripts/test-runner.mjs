@@ -30,6 +30,7 @@ try {
   if (!ready) throw new Error(`Next dev server did not become ready.\n${logs}`);
   await run(process.execPath, ['scripts/smoke-test.mjs'], { ...env, TEST_BASE_URL: base });
   await run(process.execPath, ['scripts/print-layout-test.mjs'], env);
+  await run(process.execPath, ['scripts/profile-test.mjs'], env);
 } finally {
   stop();
 }
