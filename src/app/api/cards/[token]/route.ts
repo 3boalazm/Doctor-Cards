@@ -1,0 +1,49 @@
+import { NextResponse } from 'next/server';
+import { getCardForPrint, getPublicCard, updateCard } from '@/lib/store';
+import { verifySession } from '@/lib/auth';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: Request, context: { params: Promise<{ token: string }> }) {
+  if (process.env.NODE_ENV === 'production') return NextResponse.json({ error: 'النسخة الحالية للتطوير المحلي فقط.' }, { status: 503 });
+  const { token } = await context.params;
+  const mode = new URL(request.url).searchParams.get('mode');
+  if (mode === 'print') {
+    const card = await getCardForPrint(token);
+    if (!card) return NextResponse.json({ error: 'الكارت غير متاح.' }, { status: 404 });
+    return NextResponse.json(card);
+  }
+  const card = await getPublicCard(token);
+  if (!card) return NextResponse.json({ error: 'البروفايل غير متاح حاليًا.' }, { status: 404 });
+  const { doctorNameAr, doctorNameEn, specialty, phone, whatsapp, email, clinicAddress, mapsUrl, website, bio } = card;
+  return NextResponse.json({ doctorNameAr, doctorNameEn, specialty, phone, whatsapp, email, clinicAddress, mapsUrl, website, bio });
+}
+
+export async function PATCH(request: Request, context: { params: Promise<{ token: string }> }) {
+  if (process.env.NODE_ENV === 'production') return NextResponse.json({ error: 'النسخة الحالية للتطوير المحلي فقط.' }, { status: 503 });
+  if (!verifySession(request)) return NextResponse.json({ error: 'سجل الدخول أولاً.' }, { status: 401 });
+  const { token } = await context.params;
+  const body = await request.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: 'بيانات غير صالحة.' }, { status: 400 });
+  if (body.action === 'toggle-status') {
+    const updated = await updateCard(token, { status: body.status === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE' });
+    return updated ? NextResponse.json({ status: updated.status }) : NextResponse.json({ error: 'الكارت غير موجود.' }, { status: 404 });
+  }
+  if (body.action === 'toggle-distribution') {
+    const updated = await updateCard(token, { distributionStatus: body.distributionStatus === 'DISTRIBUTED' ? 'DISTRIBUTED' : 'NOT_DISTRIBUTED' });
+    return updated ? NextResponse.json({ distributionStatus: updated.distributionStatus }) : NextResponse.json({ error: 'الكارت غير موجود.' }, { status: 404 });
+  }
+  if (typeof body.doctorNameAr !== 'string' || !body.doctorNameAr.trim()) return NextResponse.json({ error: 'اسم الطبيب بالعربي مطلوب.' }, { status: 400 });
+  if (!body.consentProfile) return NextResponse.json({ error: 'يلزم تأكيد الموافقة على نشر بيانات البروفايل.' }, { status: 400 });
+  const cleanUrl = (value: unknown) => { if (!value || typeof value !== 'string') return ''; try { return new URL(value).protocol === 'https:' ? value : ''; } catch { return ''; } };
+  const updated = await updateCard(token, {
+    doctorNameAr: body.doctorNameAr.trim().slice(0, 100), doctorNameEn: String(body.doctorNameEn ?? '').trim().slice(0, 100),
+    specialty: String(body.specialty ?? '').trim().slice(0, 100), phone: String(body.phone ?? '').trim().slice(0, 40),
+    whatsapp: String(body.whatsapp ?? '').trim().slice(0, 40), email: String(body.email ?? '').trim().slice(0, 160),
+    clinicAddress: String(body.clinicAddress ?? '').trim().slice(0, 200), mapsUrl: cleanUrl(body.mapsUrl), website: cleanUrl(body.website),
+    bio: String(body.bio ?? '').trim().slice(0, 500), edition: body.edition === 'LIMITED' ? 'LIMITED' : body.edition === 'DEMO' ? 'DEMO' : 'STANDARD',
+    consentProfile: true, consentPhoto: Boolean(body.consentPhoto),
+  });
+  return updated ? NextResponse.json(updated) : NextResponse.json({ error: 'الكارت غير موجود.' }, { status: 404 });
+}
