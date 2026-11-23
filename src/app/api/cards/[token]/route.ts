@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getCardForPrint, getPublicCard, getUnclaimedCard, updateCard } from '@/lib/store';
 import { verifySession } from '@/lib/auth';
 import { validatePortraitData } from '@/lib/portrait-validation';
+import { sanitizeExtras } from '@/lib/profile-extras';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,8 +19,8 @@ export async function GET(request: Request, context: { params: Promise<{ token: 
   if (unclaimed) return NextResponse.json({ state: 'UNCLAIMED', serial: unclaimed.serial });
   const card = await getPublicCard(token);
   if (!card) return NextResponse.json({ error: 'البروفايل غير متاح حاليًا.' }, { status: 404 });
-  const { doctorNameAr, doctorNameEn, specialty, phone, whatsapp, email, clinicAddress, mapsUrl, website, bio } = card;
-  return NextResponse.json({ state: 'ACTIVE', doctorNameAr, doctorNameEn, specialty, phone, whatsapp, email, clinicAddress, mapsUrl, website, bio, portraitData: card.consentPhoto ? card.portraitData : null });
+  const { doctorNameAr, doctorNameEn, specialty, phone, whatsapp, email, clinicAddress, mapsUrl, website, bio, extras } = card;
+  return NextResponse.json({ state: 'ACTIVE', doctorNameAr, doctorNameEn, specialty, phone, whatsapp, email, clinicAddress, mapsUrl, website, bio, extras, portraitData: card.consentPhoto ? card.portraitData : null });
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ token: string }> }) {
@@ -45,7 +46,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ token
     specialty: String(body.specialty ?? '').trim().slice(0, 100), phone: String(body.phone ?? '').trim().slice(0, 40),
     whatsapp: String(body.whatsapp ?? '').trim().slice(0, 40), email: String(body.email ?? '').trim().slice(0, 160),
     clinicAddress: String(body.clinicAddress ?? '').trim().slice(0, 200), mapsUrl: cleanUrl(body.mapsUrl), website: cleanUrl(body.website),
-    bio: String(body.bio ?? '').trim().slice(0, 500), portraitData: portrait.data, edition: body.edition === 'LIMITED' ? 'LIMITED' : body.edition === 'DEMO' ? 'DEMO' : 'STANDARD',
+    bio: String(body.bio ?? '').trim().slice(0, 500), portraitData: portrait.data, extras: sanitizeExtras(body.extras), edition: body.edition === 'LIMITED' ? 'LIMITED' : body.edition === 'DEMO' ? 'DEMO' : 'STANDARD',
     consentProfile: true, consentPhoto: Boolean(body.consentPhoto),
   });
   return updated ? NextResponse.json(updated) : NextResponse.json({ error: 'الكارت غير موجود.' }, { status: 404 });

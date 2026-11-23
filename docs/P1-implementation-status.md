@@ -8,9 +8,10 @@
 ### A. Print proof and imposition
 
 - `/print/{token}` now uses the dedicated real stylesheet `src/app/print/print.css`; no styled-jsx global print rules.
-- Finished trim: **85 × 55 mm**, with a toggle for 3 mm bleed and crop marks.
-- Front: orange `#FF6B47`, dark ink text, Arabic/English name, specialty, and portrait panel extending into bleed when bleed is enabled.
-- Back: dark `#080710`, 34 mm QR symbol including a 4-module quiet zone, QR error correction level Q, destination URL, serial, and “SCAN TO CONNECT / امسح للتواصل”.
+- Finished trim: **90 × 55 mm** (per the print specification), with a toggle for 3 mm bleed (96 × 61 mm artboard) and crop marks.
+- Front: navy `#0B1622` with a cyan glow and the stethoscope line-art engraving, white Arabic/English name, specialty chip, and a portrait panel that fades into the background and extends into bleed when bleed is enabled.
+- Back: light `#F4F8FB`, 34 mm QR symbol (dark `#0B1622` on white) including a 4-module quiet zone inside a solid white frame, QR error correction level Q, destination URL, serial, and “امسح للتواصل / SCAN TO CONNECT”.
+- A4 8-up with bleed is 2 × 96 mm + 3 mm gap = 195 mm wide, leaving 7.5 mm side margins on the 210 mm sheet.
 - Repeated-card A4 8-up and A5 3-up imposition, with matching front/back sheets for duplex printing.
 - **Caveat:** duplex alignment, bleed tolerance, color profile, and crop marks have not been validated against a selected printer/physical proof. The sheet repeats the same selected card; it is not a mixed-card batch imposition engine.
 

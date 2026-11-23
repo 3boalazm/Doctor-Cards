@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomBytes, randomUUID } from 'node:crypto';
+import { emptyExtras, normalizeExtras, type ProfileExtras } from './profile-extras';
 
 export type DoctorCard = {
   id: string;
@@ -15,6 +16,7 @@ export type DoctorCard = {
   website: string;
   bio: string;
   portraitData: string | null;
+  extras: ProfileExtras;
   serial: string;
   token: string;
   edition: 'STANDARD' | 'LIMITED' | 'DEMO';
@@ -35,7 +37,7 @@ let writeQueue: Promise<unknown> = Promise.resolve();
 async function readStore(): Promise<Store> {
   try {
     const raw = JSON.parse(await readFile(dataFile, 'utf8')) as Partial<Store>;
-    return { cards: (raw.cards ?? []).map((card) => ({ ...card, portraitData: card.portraitData ?? null, distributionStatus: card.distributionStatus ?? 'NOT_DISTRIBUTED' })), scans: raw.scans ?? [], monthly: raw.monthly ?? {} };
+    return { cards: (raw.cards ?? []).map((card) => ({ ...card, portraitData: card.portraitData ?? null, extras: normalizeExtras(card.extras), distributionStatus: card.distributionStatus ?? 'NOT_DISTRIBUTED' })), scans: raw.scans ?? [], monthly: raw.monthly ?? {} };
   } catch { return { cards: [], scans: [], monthly: {} }; }
 }
 async function writeStore(store: Store) {
@@ -77,7 +79,7 @@ export async function createBlankCards(count: number) {
     const start = store.cards.length;
     const cards = Array.from({ length: count }, (_, index): DoctorCard => ({
       id: randomUUID(), token: randomBytes(24).toString('base64url'), serial: `AZM-S${String(start + index + 1).padStart(3, '0')}`,
-      doctorNameAr: '', doctorNameEn: '', specialty: '', phone: '', whatsapp: '', email: '', clinicAddress: '', mapsUrl: '', website: '', bio: '', portraitData: null,
+      doctorNameAr: '', doctorNameEn: '', specialty: '', phone: '', whatsapp: '', email: '', clinicAddress: '', mapsUrl: '', website: '', bio: '', portraitData: null, extras: emptyExtras(),
       edition: 'STANDARD', status: 'UNCLAIMED', distributionStatus: 'NOT_DISTRIBUTED', consentProfile: false, consentPhoto: false, createdAt: new Date().toISOString(),
     }));
     store.cards.unshift(...cards);
@@ -93,7 +95,7 @@ export async function getUnclaimedCard(token: string) {
     return { serial: card.serial };
   });
 }
-type ClaimInput = Pick<DoctorCard, 'doctorNameAr' | 'doctorNameEn' | 'specialty' | 'phone' | 'whatsapp' | 'email' | 'clinicAddress' | 'mapsUrl' | 'website' | 'bio' | 'portraitData' | 'consentPhoto'>;
+type ClaimInput = Pick<DoctorCard, 'doctorNameAr' | 'doctorNameEn' | 'specialty' | 'phone' | 'whatsapp' | 'email' | 'clinicAddress' | 'mapsUrl' | 'website' | 'bio' | 'portraitData' | 'extras' | 'consentPhoto'>;
 export async function claimUnclaimedCard(token: string, profile: ClaimInput) {
   return mutate((store) => {
     const card = store.cards.find((item) => item.token === token && item.status === 'UNCLAIMED');
@@ -102,7 +104,7 @@ export async function claimUnclaimedCard(token: string, profile: ClaimInput) {
     return card;
   });
 }
-export async function updateCard(token: string, patch: Partial<Pick<DoctorCard, 'doctorNameAr' | 'doctorNameEn' | 'specialty' | 'phone' | 'whatsapp' | 'email' | 'clinicAddress' | 'mapsUrl' | 'website' | 'bio' | 'portraitData' | 'edition' | 'status' | 'distributionStatus' | 'consentProfile' | 'consentPhoto'>>) {
+export async function updateCard(token: string, patch: Partial<Pick<DoctorCard, 'doctorNameAr' | 'doctorNameEn' | 'specialty' | 'phone' | 'whatsapp' | 'email' | 'clinicAddress' | 'mapsUrl' | 'website' | 'bio' | 'portraitData' | 'extras' | 'edition' | 'status' | 'distributionStatus' | 'consentProfile' | 'consentPhoto'>>) {
   return mutate((store) => {
     const card = store.cards.find((item) => item.token === token); if (!card) return null;
     Object.assign(card, patch);

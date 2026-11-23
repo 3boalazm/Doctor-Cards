@@ -4,3 +4,19 @@
 .section-buttons{display:flex;align-items:center;gap:8px}.status-tag.unclaimed{background:#f3f0e7;color:#917b4b}.status-tag.unclaimed i{background:#bea365}.bulk-modal{width:min(430px,100%);background:#fff;border:1px solid #e8ece8;border-radius:15px;padding:26px;position:relative;box-shadow:0 25px 80px #14261e35}.bulk-close{position:absolute;top:14px;left:14px}.bulk-icon{width:42px;height:42px;background:#eaf3ed;color:#34775c;border-radius:12px;display:grid;place-items:center;margin-bottom:12px}.bulk-modal h2{font-size:18px;margin:5px 0}.bulk-modal>p{font-size:10px;line-height:1.9;color:#858f89;margin:0 0 17px}.bulk-actions{display:flex;justify-content:flex-start;gap:8px;margin-top:17px}.bulk-modal .field input{direction:ltr;text-align:left}@media(max-width:600px){.section-buttons{gap:5px}.section-buttons button{font-size:8px;padding:8px 7px}.bulk-modal{padding:23px 18px}}
 .filter-select{height:33px;display:flex;align-items:center;gap:6px;padding:0 8px;border:1px solid #e8ece8;background:#fff;border-radius:7px;color:#78847c}.filter-select select{max-width:118px;border:0;outline:0;background:transparent;color:#66736b;font-size:9px;cursor:pointer}.edition-filter select{max-width:100px}.top-logout{display:inline-flex;align-items:center;gap:4px;background:#fff;border:1px solid #e8ece8;border-radius:7px;color:#657168;padding:6px 8px;font-size:10px}.top-logout:hover{border-color:#e0c5bb;color:#a75e45}.qr-modal-actions{flex-wrap:wrap}.qr-modal-actions>*{min-width:calc(50% - 5px)}@media(max-width:600px){.top-logout span{display:none}.top-logout{width:28px;height:28px;justify-content:center;padding:0}.top-actions{gap:6px}.filter-select{padding:0 5px}.filter-select select{max-width:80px;font-size:8px}.edition-filter select{max-width:72px}.table-toolbar{gap:6px}.toolbar-actions{gap:4px}}
 .toast.error{background:#8e362d}.toast.error svg:first-child{color:#ffd4ca}
+
+/* Admin: extended profile sections (workplaces, booking, hours, credentials) */
+.field-hint{display:block;color:#98a29d;font-size:9px;line-height:1.6;margin-top:2px}
+.form-grid+.field-hint{margin-top:8px}
+.field input.text-input{direction:rtl;text-align:right}
+.hours-editor{display:grid;gap:6px;border:1px solid #e6ebe6;border-radius:9px;padding:8px;background:#fcfdfc}
+.hours-row{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:34px;padding:3px 6px;border-radius:7px}
+.hours-row.is-open{background:#f0f6f2}
+.hours-day{display:flex;align-items:center;gap:8px;font-size:10px;color:#44534b;cursor:pointer}
+.hours-day input{accent-color:var(--green);width:14px;height:14px}
+.hours-times{display:flex;align-items:center;gap:6px;color:#98a29d;font-size:10px}
+.hours-times input{border:1px solid #dfe6e1;border-radius:6px;background:#fff;color:#36443c;font:inherit;font-size:10px;padding:5px 6px;outline:none}
+.hours-times input:focus{border-color:#93b7a0;box-shadow:0 0 0 3px #eaf4ed}
+.hours-closed{font-size:9px;color:#a7b0ab}
+.hours-apply{justify-self:start;border:0;background:none;color:var(--green);font-size:9.5px;font-weight:600;padding:4px 6px;cursor:pointer}
+.hours-apply:hover{text-decoration:underline}

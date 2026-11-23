@@ -27,6 +27,12 @@ const claim = { doctorNameAr: 'تفعيل', doctorNameEn: '', specialty: '', pho
 assert.equal((await store.claimUnclaimedCard(blanks[0].token, claim)).status, 'ACTIVE');
 assert.equal(await store.getUnclaimedCard(blanks[0].token), null);
 assert.equal(await store.claimUnclaimedCard(blanks[0].token, claim), null, 'claim must be one-time');
+// Extended profile sections round-trip through the jsonb column (create, update, claim).
+const extras = { workplaces: ['مستشفى'], bookingUrl: 'https://book.example/', bookingPhone: '0100', hours: [{ day: 1, open: true, from: '17:00', to: '22:00' }], hoursNote: '', credentials: ['MD'], services: ['إيكو'], fees: { consultation: '500', followUp: '' }, insurance: [] };
+assert.deepEqual((await store.createCard({ ...base, doctorNameAr: 'ج', edition: 'STANDARD', consentProfile: true, extras })).extras.services, ['إيكو']);
+assert.deepEqual((await store.updateCard(b.token, { extras: { ...extras, credentials: ['PhD'] } })).extras.credentials, ['PhD']);
+assert.deepEqual((await store.listCards()).find((c) => c.id === a.id).extras.workplaces, [], 'cards created without extras read back empty');
+assert.deepEqual((await store.claimUnclaimedCard(blanks[1].token, { ...claim, extras })).extras.hours[0].to, '22:00');
 await store.cleanupExpiredScans();
 // Simulate an existing pre-portrait schema: CREATE TABLE IF NOT EXISTS leaves it intact,
 // then the idempotent ALTER TABLE migration must add the new column.
