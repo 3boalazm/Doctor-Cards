@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { claimUnclaimedCard } from '@/lib/store';
 import { validatePortraitData } from '@/lib/portrait-validation';
+import { sanitizeExtras } from '@/lib/profile-extras';
 export const runtime = 'nodejs';
 
 export async function POST(request: Request, context: { params: Promise<{ token: string }> }) {
@@ -17,7 +18,7 @@ export async function POST(request: Request, context: { params: Promise<{ token:
     specialty: String(body.specialty ?? '').trim().slice(0, 100), phone: String(body.phone ?? '').trim().slice(0, 40),
     whatsapp: String(body.whatsapp ?? '').trim().slice(0, 40), email: String(body.email ?? '').trim().slice(0, 160),
     clinicAddress: String(body.clinicAddress ?? '').trim().slice(0, 200), mapsUrl: safeUrl(body.mapsUrl), website: safeUrl(body.website),
-    bio: String(body.bio ?? '').trim().slice(0, 500), portraitData: portrait.data, consentPhoto: Boolean(body.consentPhoto),
+    bio: String(body.bio ?? '').trim().slice(0, 500), portraitData: portrait.data, extras: sanitizeExtras(body.extras), consentPhoto: Boolean(body.consentPhoto),
   });
   if (!card) return NextResponse.json({ error: 'الكارت تم تفعيله بالفعل أو لم يعد متاحًا.' }, { status: 409 });
   return NextResponse.json({ status: card.status, serial: card.serial });

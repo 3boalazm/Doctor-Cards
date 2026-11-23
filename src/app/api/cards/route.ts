@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createCard, listCards } from '@/lib/store';
 import { verifySession } from '@/lib/auth';
 import { validatePortraitData } from '@/lib/portrait-validation';
+import { sanitizeExtras } from '@/lib/profile-extras';
 
 export const runtime = 'nodejs';
 
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
     website: safeUrl(body.website),
     bio: String(body.bio ?? '').trim().slice(0, 500),
     portraitData: portrait.data,
+    extras: sanitizeExtras(body.extras),
     edition: body.edition === 'LIMITED' ? 'LIMITED' : body.edition === 'DEMO' ? 'DEMO' : 'STANDARD',
     consentProfile: Boolean(body.consentProfile),
     consentPhoto: Boolean(body.consentPhoto),

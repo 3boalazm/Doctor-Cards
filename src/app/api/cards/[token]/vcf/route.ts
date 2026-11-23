@@ -23,7 +23,9 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
   const lines = [
     'BEGIN:VCARD', 'VERSION:3.0', `FN:${escapeVCard(fullName)}`, `N:${escapeVCard(card.doctorNameAr)};;;;`,
     ...(card.specialty ? [`TITLE:${escapeVCard(card.specialty)}`] : []),
+    ...(card.extras?.workplaces?.[0] ? [`ORG:${escapeVCard(card.extras.workplaces[0])}`] : []),
     ...(card.phone ? [`TEL;TYPE=WORK,VOICE:${escapeVCard(card.phone)}`] : []),
+    ...(card.extras?.bookingPhone && card.extras.bookingPhone !== card.phone ? [`TEL;TYPE=WORK,MSG:${escapeVCard(card.extras.bookingPhone)}`] : []),
     ...(card.email ? [`EMAIL;TYPE=WORK:${escapeVCard(card.email)}`] : []),
     ...(card.clinicAddress ? [`ADR;TYPE=WORK:;;${escapeVCard(card.clinicAddress)};;;;`] : []),
     ...(card.website ? [`URL:${escapeVCard(card.website)}`] : []),

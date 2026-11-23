@@ -2,9 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
-import { ArrowRight, Printer, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Printer, ShieldCheck, Stethoscope } from 'lucide-react';
 import '../print.css';
-import { printQrUrl, QR_PRINT, SHEET_LAYOUTS } from '@/lib/print-spec';
+import { CARD_TRIM, cropMarkGeometry, printQrUrl, QR_PRINT, SHEET_LAYOUTS } from '@/lib/print-spec';
+
+const TRIM_LABEL = `${CARD_TRIM.widthMm} × ${CARD_TRIM.heightMm}`;
+import MedicalLineArt from '@/components/medical-line-art';
 
 type PrintCard = { doctorNameAr: string; doctorNameEn: string; specialty: string; serial: string; token: string; edition: string; status: 'UNCLAIMED' | 'ACTIVE' | 'SUSPENDED'; portraitData?: string | null };
 type SheetSize = 'single' | 'a4' | 'a5';
@@ -26,7 +29,7 @@ export default function PrintProof({ params }: { params: Promise<{ token: string
       const response = await fetch(`/api/cards/${token}?mode=print`, { cache: 'no-store' });
       if (!response.ok) throw new Error('unavailable');
       const data = await response.json() as PrintCard;
-      const png = await QRCode.toDataURL(printQrUrl(window.location.origin, data.token), { width: 900, margin: QR_PRINT.renderMarginModules, errorCorrectionLevel: QR_PRINT.errorCorrectionLevel, color: { dark: '#080710', light: '#ffffff' } });
+      const png = await QRCode.toDataURL(printQrUrl(window.location.origin, data.token), { width: 900, margin: QR_PRINT.renderMarginModules, errorCorrectionLevel: QR_PRINT.errorCorrectionLevel, color: { dark: '#0b1622', light: '#ffffff' } });
       if (alive) { setCard(data); setQr(png); }
     }).catch(() => { if (alive) setError(true); });
     return () => { alive = false; };
@@ -47,7 +50,7 @@ export default function PrintProof({ params }: { params: Promise<{ token: string
       <label className="check-control"><input type="checkbox" checked={cropMarks} onChange={(e) => setCropMarks(e.target.checked)}/> علامات قص</label>
       <button className="print-action" onClick={() => window.print()}><Printer size={16}/> طباعة / حفظ PDF</button>
     </header>
-    <section className="proof-heading"><h1>معاينة الطباعة · {card.serial}</h1><p>المقاس النهائي 85 × 55 مم. اختر ورقة الطباعة ثم راجع إثبات الطباعة.</p></section>
+    <section className="proof-heading"><h1>معاينة الطباعة · {card.serial}</h1><p>المقاس النهائي {TRIM_LABEL} مم. اختر ورقة الطباعة ثم راجع إثبات الطباعة.</p></section>
     <div className="proof-notice"><ShieldCheck size={15} style={{ verticalAlign: 'middle', marginInlineEnd: 5 }}/> إثبات بصري أولي؛ راجع معايرة المطبعة واتجاه الوجهين قبل اعتماد الإنتاج.</div>
     {sheet === 'single' ? <section className="proof-sides">
       <div className="proof-side"><span className="proof-side-title">01 · الوجه الأمامي</span><CardFace side="front" card={card} qr={qr} shortUrl={shortUrl} bleed={bleed}>{crop}</CardFace></div>
@@ -66,7 +69,20 @@ export default function PrintProof({ params }: { params: Promise<{ token: string
 
 function CardFace({ side, card, qr, shortUrl, bleed, children }: { side: 'front' | 'back'; card: PrintCard; qr: string; shortUrl: string; bleed: boolean; children: React.ReactNode }) {
   return <div className={`card-bleed bleed-${side}`}><article className={`card-trim card-${side}`}>
-    {side === 'front' ? <><div className="front-copy"><div className="front-brand"><i/> DOCTOR CARDS</div><div className="front-name-ar">{card.status === 'UNCLAIMED' ? 'بطاقة طبيب' : card.doctorNameAr || 'اسم الطبيب'}</div>{card.status === 'UNCLAIMED' ? <div className="front-name-en">SCAN TO CLAIM YOUR PROFILE</div> : card.doctorNameEn && <div className="front-name-en">{card.doctorNameEn}</div>}{card.specialty && <div className="front-specialty">{card.specialty}</div>}{card.edition === 'DEMO' && <div className="front-edition">SAMPLE EDITION</div>}</div><div className="portrait-panel">{card.portraitData ? <img src={card.portraitData} alt="Doctor portrait"/> : <div className="portrait-fallback">صورة<br/>الدكتور</div>}</div>{card.edition === 'DEMO' && <div className="demo-ribbon">{demoCopy}</div>}</> : <><div className="back-qr-frame"><img src={qr} alt="QR code"/></div><div className="back-copy"><div className="back-kicker">DOCTOR CARDS</div><div className="back-cta">SCAN TO CONNECT<br/>امسح للتواصل</div><div className="back-url">{shortUrl}</div><div className="back-serial">{card.serial}</div></div></>}
-  </article>{children}{!bleed && <span className="trim-size-label">85 × 55 mm</span>}</div>;
+    {side === 'front'
+      ? <><MedicalLineArt className="card-art front-art"/>
+          <div className="front-copy">
+            <div className="front-brand"><span className="front-mark"><Stethoscope/></span>DOCTOR <b>CARDS</b></div>
+            <div className="front-name-ar">{card.status === 'UNCLAIMED' ? 'بطاقة طبيب' : card.doctorNameAr || 'اسم الطبيب'}</div>
+            {card.status === 'UNCLAIMED' ? <div className="front-name-en">SCAN TO CLAIM YOUR PROFILE</div> : card.doctorNameEn && <div className="front-name-en">{card.doctorNameEn}</div>}
+            {card.specialty && <div className="front-specialty"><Stethoscope/>{card.specialty}</div>}
+            {card.edition === 'DEMO' && <div className="front-edition">SAMPLE EDITION</div>}
+          </div>
+          <div className="portrait-panel">{card.portraitData ? <img src={card.portraitData} alt="Doctor portrait"/> : <div className="portrait-fallback"><MedicalLineArt className="card-art fallback-art"/><span className="fallback-emblem"><Stethoscope/></span></div>}</div>
+          {card.edition === 'DEMO' && <div className="demo-ribbon">{demoCopy}</div>}</>
+      : <><MedicalLineArt className="card-art back-art"/>
+          <div className="back-qr-frame"><img src={qr} alt="QR code"/></div>
+          <div className="back-copy"><div className="back-kicker"><span className="front-mark"><Stethoscope/></span>DOCTOR CARDS</div><div className="back-cta">امسح للتواصل<br/><span>SCAN TO CONNECT</span></div><div className="back-url">{shortUrl}</div><div className="back-serial">{card.serial}</div></div></>}
+  </article>{children}{!bleed && <span className="trim-size-label">{TRIM_LABEL} mm</span>}</div>;
 }
-function CropMarks({ bleed }: { bleed: boolean }) { const path = bleed ? 'M0 3H2 M3 0V2 M89 3H91 M88 0V2 M0 58H2 M3 59V61 M89 58H91 M88 59V61' : 'M-2 0H0 M0 -2V0 M85 0H87 M85 -2V0 M-2 55H0 M0 55V57 M85 55H87 M85 55V57'; return <svg className="crop-overlay" viewBox={bleed ? '0 0 91 61' : '0 0 85 55'} preserveAspectRatio="none" aria-hidden="true"><path d={path} fill="none" stroke="#111" strokeWidth=".18" vectorEffect="non-scaling-stroke"/></svg>; }
+function CropMarks({ bleed }: { bleed: boolean }) { const { viewBox, path } = cropMarkGeometry(bleed); return <svg className="crop-overlay" viewBox={viewBox} preserveAspectRatio="none" aria-hidden="true"><path d={path} fill="none" stroke="#111" strokeWidth=".18" vectorEffect="non-scaling-stroke"/></svg>; }

@@ -1,9 +1,10 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import type { DoctorCard } from './store-json';
+import { normalizeExtras } from './profile-extras.ts'; // explicit extension: loaded directly by Node in scripts/pg-store-test.mjs
 
 export type Query = (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
 type Create = Omit<DoctorCard, 'id' | 'token' | 'createdAt' | 'status' | 'serial' | 'distributionStatus'>;
-type Patch = Partial<Pick<DoctorCard, 'doctorNameAr' | 'doctorNameEn' | 'specialty' | 'phone' | 'whatsapp' | 'email' | 'clinicAddress' | 'mapsUrl' | 'website' | 'bio' | 'edition' | 'status' | 'distributionStatus' | 'consentProfile' | 'consentPhoto'>>;
+type Patch = Partial<Pick<DoctorCard, 'doctorNameAr' | 'doctorNameEn' | 'specialty' | 'phone' | 'whatsapp' | 'email' | 'clinicAddress' | 'mapsUrl' | 'website' | 'bio' | 'extras' | 'edition' | 'status' | 'distributionStatus' | 'consentProfile' | 'consentPhoto'>>;
 
 const SCHEMA = `
 CREATE SEQUENCE IF NOT EXISTS dc_serial_seq;
@@ -17,6 +18,7 @@ CREATE TABLE IF NOT EXISTS dc_cards (
   portrait_data text, created_at timestamptz NOT NULL DEFAULT now()
 );
 ALTER TABLE dc_cards ADD COLUMN IF NOT EXISTS portrait_data text;
+ALTER TABLE dc_cards ADD COLUMN IF NOT EXISTS extras jsonb NOT NULL DEFAULT '{}'::jsonb;
 CREATE TABLE IF NOT EXISTS dc_scans (card_id uuid NOT NULL REFERENCES dc_cards(id) ON DELETE CASCADE, at timestamptz NOT NULL DEFAULT now());
 CREATE INDEX IF NOT EXISTS dc_scans_at ON dc_scans(at);
 CREATE TABLE IF NOT EXISTS dc_monthly (card_id uuid NOT NULL REFERENCES dc_cards(id) ON DELETE CASCADE, month text NOT NULL, count integer NOT NULL DEFAULT 0, PRIMARY KEY (card_id, month));`;
@@ -24,7 +26,7 @@ CREATE TABLE IF NOT EXISTS dc_monthly (card_id uuid NOT NULL REFERENCES dc_cards
 const COL: Record<string, string> = { doctorNameAr: 'doctor_name_ar', doctorNameEn: 'doctor_name_en', specialty: 'specialty', phone: 'phone', whatsapp: 'whatsapp', email: 'email', clinicAddress: 'clinic_address', mapsUrl: 'maps_url', website: 'website', bio: 'bio', portraitData: 'portrait_data', edition: 'edition', status: 'status', distributionStatus: 'distribution_status', consentProfile: 'consent_profile', consentPhoto: 'consent_photo' };
 const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : v ? new Date(String(v)).toISOString() : undefined);
 function toCard(r: Record<string, unknown>): DoctorCard {
-  return { id: String(r.id), token: String(r.token), serial: String(r.serial), doctorNameAr: String(r.doctor_name_ar), doctorNameEn: String(r.doctor_name_en), specialty: String(r.specialty), phone: String(r.phone), whatsapp: String(r.whatsapp), email: String(r.email), clinicAddress: String(r.clinic_address), mapsUrl: String(r.maps_url), website: String(r.website), bio: String(r.bio), portraitData: r.portrait_data == null ? null : String(r.portrait_data), edition: r.edition as DoctorCard['edition'], status: r.status as DoctorCard['status'], distributionStatus: r.distribution_status as DoctorCard['distributionStatus'], distributedAt: iso(r.distributed_at), consentProfile: Boolean(r.consent_profile), consentPhoto: Boolean(r.consent_photo), createdAt: iso(r.created_at)! };
+  return { id: String(r.id), token: String(r.token), serial: String(r.serial), doctorNameAr: String(r.doctor_name_ar), doctorNameEn: String(r.doctor_name_en), specialty: String(r.specialty), phone: String(r.phone), whatsapp: String(r.whatsapp), email: String(r.email), clinicAddress: String(r.clinic_address), mapsUrl: String(r.maps_url), website: String(r.website), bio: String(r.bio), portraitData: r.portrait_data == null ? null : String(r.portrait_data), extras: normalizeExtras(r.extras), edition: r.edition as DoctorCard['edition'], status: r.status as DoctorCard['status'], distributionStatus: r.distribution_status as DoctorCard['distributionStatus'], distributedAt: iso(r.distributed_at), consentProfile: Boolean(r.consent_profile), consentPhoto: Boolean(r.consent_photo), createdAt: iso(r.created_at)! };
 }
 
 export function createPgStore(query: Query) {
@@ -40,9 +42,9 @@ export function createPgStore(query: Query) {
       await init();
       const prefix = input.edition === 'LIMITED' ? 'AZM-L' : input.edition === 'DEMO' ? 'AZM-D' : 'AZM-S';
       const { rows } = await query(
-        `INSERT INTO dc_cards (id, token, serial, doctor_name_ar, doctor_name_en, specialty, phone, whatsapp, email, clinic_address, maps_url, website, bio, edition, consent_profile, consent_photo, portrait_data)
-         VALUES ($1,$2,$3 || lpad(nextval('dc_serial_seq')::text, 3, '0'),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
-        [randomUUID(), randomBytes(24).toString('base64url'), prefix, input.doctorNameAr, input.doctorNameEn, input.specialty, input.phone, input.whatsapp, input.email, input.clinicAddress, input.mapsUrl, input.website, input.bio, input.edition, input.consentProfile, input.consentPhoto, input.portraitData]);
+        `INSERT INTO dc_cards (id, token, serial, doctor_name_ar, doctor_name_en, specialty, phone, whatsapp, email, clinic_address, maps_url, website, bio, edition, consent_profile, consent_photo, portrait_data, extras)
+         VALUES ($1,$2,$3 || lpad(nextval('dc_serial_seq')::text, 3, '0'),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb) RETURNING *`,
+        [randomUUID(), randomBytes(24).toString('base64url'), prefix, input.doctorNameAr, input.doctorNameEn, input.specialty, input.phone, input.whatsapp, input.email, input.clinicAddress, input.mapsUrl, input.website, input.bio, input.edition, input.consentProfile, input.consentPhoto, input.portraitData, JSON.stringify(input.extras ?? {})]);
       return toCard(rows[0]);
     },
     async createBlankCards(count: number) {
@@ -68,13 +70,15 @@ export function createPgStore(query: Query) {
     },
     async claimUnclaimedCard(token: string, profile: Omit<DoctorCard, 'id' | 'token' | 'serial' | 'edition' | 'status' | 'distributionStatus' | 'distributedAt' | 'createdAt' | 'consentProfile' | 'scans'>) {
       await init();
-      const { rows } = await query(`UPDATE dc_cards SET doctor_name_ar=$2,doctor_name_en=$3,specialty=$4,phone=$5,whatsapp=$6,email=$7,clinic_address=$8,maps_url=$9,website=$10,bio=$11,portrait_data=$12,consent_photo=$13,consent_profile=true,status='ACTIVE' WHERE token=$1 AND status='UNCLAIMED' RETURNING *`, [token, profile.doctorNameAr, profile.doctorNameEn, profile.specialty, profile.phone, profile.whatsapp, profile.email, profile.clinicAddress, profile.mapsUrl, profile.website, profile.bio, profile.portraitData, profile.consentPhoto]);
+      const { rows } = await query(`UPDATE dc_cards SET doctor_name_ar=$2,doctor_name_en=$3,specialty=$4,phone=$5,whatsapp=$6,email=$7,clinic_address=$8,maps_url=$9,website=$10,bio=$11,portrait_data=$12,consent_photo=$13,extras=$14::jsonb,consent_profile=true,status='ACTIVE' WHERE token=$1 AND status='UNCLAIMED' RETURNING *`, [token, profile.doctorNameAr, profile.doctorNameEn, profile.specialty, profile.phone, profile.whatsapp, profile.email, profile.clinicAddress, profile.mapsUrl, profile.website, profile.bio, profile.portraitData, profile.consentPhoto, JSON.stringify(profile.extras ?? {})]);
       return rows[0] ? toCard(rows[0]) : null;
     },
     async updateCard(token: string, patch: Patch) {
       await init();
       const sets: string[] = []; const params: unknown[] = [token];
-      for (const [k, v] of Object.entries(patch)) { if (v === undefined || !COL[k]) continue; params.push(v); sets.push(`${COL[k]} = $${params.length}`); }
+      for (const [k, v] of Object.entries(patch)) { if (v === undefined) continue;
+        if (k === 'extras') { params.push(JSON.stringify(v)); sets.push(`extras = $${params.length}::jsonb`); continue; }
+        if (!COL[k]) continue; params.push(v); sets.push(`${COL[k]} = $${params.length}`); }
       if (patch.distributionStatus) sets.push(patch.distributionStatus === 'DISTRIBUTED' ? 'distributed_at = now()' : 'distributed_at = NULL');
       if (!sets.length) return null;
       const { rows } = await query(`UPDATE dc_cards SET ${sets.join(', ')} WHERE token = $1 RETURNING *`, params);
